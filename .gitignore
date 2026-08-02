@@ -3,3 +3,5 @@ dist/
 screen-fleet-pilot-client/build*/
 screen-fleet-pilot-embedded/device-agent/build*/
 screen-fleet-pilot-server/build*/
+screen-fleet-pilot-server_1/build*/
+
