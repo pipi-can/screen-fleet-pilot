@@ -1,0 +1,410 @@
+#include "networkmanager.h"
+
+#include <QFile>
+#include <QTextStream>
+#include <QRegExp>
+#include <sys/statvfs.h>
+
+// ═══════════════════════════════════════════════════════════════
+// 单例
+// ═══════════════════════════════════════════════════════════════
+
+NetworkManager& NetworkManager::getInstance()
+{
+    static NetworkManager instance;
+    return instance;
+}
+
+NetworkManager::NetworkManager(QObject* parent)
+    : QObject(parent)
+{
+    m_socket = new QTcpSocket(this);
+
+    // ── QTcpSocket 信号连接 ──
+    connect(m_socket, &QTcpSocket::connected,
+            this,     &NetworkManager::onConnected);
+    connect(m_socket, &QTcpSocket::disconnected,
+            this,     &NetworkManager::onDisconnected);
+    connect(m_socket, &QTcpSocket::readyRead,
+            this,     &NetworkManager::onReadyRead);
+    connect(m_socket, QOverload<QAbstractSocket::SocketError>::of(&QTcpSocket::error),
+            this,     &NetworkManager::onError);
+
+    // ── 心跳定时器（30 秒） ──
+    m_heartbeatTimer = new QTimer(this);
+    connect(m_heartbeatTimer, &QTimer::timeout,
+            this,             &NetworkManager::onHeartbeat);
+
+    // ── 重连定时器（5 秒） ──
+    m_reconnectTimer = new QTimer(this);
+    m_reconnectTimer->setSingleShot(true);
+    connect(m_reconnectTimer, &QTimer::timeout,
+            this,             &NetworkManager::onReconnect);
+}
+
+NetworkManager::~NetworkManager()
+{
+    if (m_socket->state() == QAbstractSocket::ConnectedState) {
+        m_socket->disconnectFromHost();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 公共接口
+// ═══════════════════════════════════════════════════════════════
+
+void NetworkManager::setDeviceInfo(const QString& name, const QString& group)
+{
+    m_deviceName  = name;
+    m_deviceGroup = group;
+}
+
+void NetworkManager::connectToServer(const QString& host, int port)
+{
+    m_serverHost = host;
+    m_serverPort = port;
+    m_statusInfo = QString("connecting to %1:%2...").arg(host).arg(port);
+    emit statusInfoChanged();
+
+    qDebug() << "[agent] connecting to" << host << ":" << port;
+    m_socket->connectToHost(host, port);
+}
+
+void NetworkManager::disconnectFromServer()
+{
+    m_heartbeatTimer->stop();
+    m_reconnectTimer->stop();
+    m_registered = false;
+
+    if (m_socket->state() == QAbstractSocket::ConnectedState) {
+        m_socket->disconnectFromHost();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// QTcpSocket 信号槽
+// ═══════════════════════════════════════════════════════════════
+
+void NetworkManager::onConnected()
+{
+    qDebug() << "[agent] TCP connected to server";
+
+    m_connected = true;
+    emit connectedChanged();
+
+    m_statusInfo = "connected, registering...";
+    emit statusInfoChanged();
+
+    // ── 发送注册包 ──
+    QJsonObject msg;
+    msg["source"]    = QStringLiteral("embedded");
+    msg["cmd"]       = QStringLiteral("register");
+    msg["seq"]       = ++m_cmdSeq;
+    msg["timestamp"] = QDateTime::currentSecsSinceEpoch();
+
+    QJsonObject params;
+    params["name"]    = m_deviceName;
+    params["group"]   = m_deviceGroup;
+    params["version"] = QStringLiteral("1.0");
+    msg["params"] = params;
+
+    sendJson(msg);
+}
+
+void NetworkManager::onDisconnected()
+{
+    qDebug() << "[agent] disconnected from server";
+
+    m_connected  = false;
+    m_registered = false;
+    m_heartbeatTimer->stop();
+
+    emit connectedChanged();
+
+    m_statusInfo = "disconnected, reconnect in 5s...";
+    emit statusInfoChanged();
+
+    // ── 自动重连 ──
+    if (!m_serverHost.isEmpty()) {
+        m_reconnectTimer->start(5000);
+    }
+}
+
+void NetworkManager::onReadyRead()
+{
+    // ── TCP 粘包处理：追加到缓冲区，按 \n 切分 ──
+    m_buffer.append(m_socket->readAll());
+
+    while (true) {
+        int idx = m_buffer.indexOf('\n');
+        if (idx < 0) break;
+
+        QByteArray line = m_buffer.left(idx).trimmed();
+        m_buffer.remove(0, idx + 1);
+
+        if (line.isEmpty()) continue;
+
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson(line, &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            qDebug() << "[agent] JSON parse error:" << parseError.errorString()
+                     << "| raw:" << line.left(100);
+            continue;
+        }
+
+        if (!doc.isObject()) continue;
+
+        QJsonObject msg    = doc.object();
+        QString     source = msg["source"].toString();
+        QString     cmd    = msg["cmd"].toString();
+        QJsonObject params = msg["params"].toObject();
+
+        handleCommand(source, cmd, params);
+    }
+}
+
+void NetworkManager::onError(QAbstractSocket::SocketError error)
+{
+    Q_UNUSED(error)
+    qDebug() << "[agent] socket error:" << m_socket->errorString();
+
+    m_connected = false;
+    emit connectedChanged();
+
+    m_statusInfo = QString("error: %1").arg(m_socket->errorString());
+    emit statusInfoChanged();
+
+    // 触发重连
+    if (!m_serverHost.isEmpty()) {
+        m_reconnectTimer->start(5000);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 心跳定时器
+// ═══════════════════════════════════════════════════════════════
+
+void NetworkManager::onHeartbeat()
+{
+    if (!m_registered || m_socket->state() != QAbstractSocket::ConnectedState)
+        return;
+
+    QJsonObject msg;
+    msg["source"]    = QStringLiteral("embedded");
+    msg["cmd"]       = QStringLiteral("heartbeat");
+    msg["seq"]       = ++m_heartbeatSeq;
+    msg["timestamp"] = QDateTime::currentSecsSinceEpoch();
+    msg["device_id"]        = m_deviceId;
+
+    // ── 采集健康数据 ──
+    QJsonObject params;
+    m_cpuTemp     = readCpuTemp();
+    m_memUsage    = readMemUsage();
+    m_diskFreeMb  = readDiskFreeMb();
+
+    params["cpu_temp"]        = m_cpuTemp;
+    params["mem_usage"]       = m_memUsage;
+    params["disk_free_mb"]    = m_diskFreeMb;
+    params["current_content"] = m_currentImage.isEmpty() ? m_currentText : m_currentImage;
+
+    msg["params"] = params;
+
+    sendJson(msg);
+    emit healthChanged();
+
+    qDebug() << "[agent] heartbeat #" << m_heartbeatSeq
+             << "cpu:" << m_cpuTemp << "mem:" << m_memUsage << "%";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 重连
+// ═══════════════════════════════════════════════════════════════
+
+void NetworkManager::onReconnect()
+{
+    if (m_socket->state() != QAbstractSocket::ConnectedState) {
+        qDebug() << "[agent] reconnecting...";
+        connectToServer(m_serverHost, m_serverPort);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JSON 发送
+// ═══════════════════════════════════════════════════════════════
+
+void NetworkManager::sendJson(const QJsonObject& msg)
+{
+    if (!m_socket || m_socket->state() != QAbstractSocket::ConnectedState) {
+        qDebug() << "[agent] sendJson failed: not connected";
+        return;
+    }
+
+    QByteArray data = QJsonDocument(msg).toJson(QJsonDocument::Compact) + "\n";
+    m_socket->write(data);
+    m_socket->flush();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 指令分发
+// ═══════════════════════════════════════════════════════════════
+
+void NetworkManager::handleCommand(const QString& source, const QString& cmd, const QJsonObject& params)
+{
+    qDebug() << "[agent] received cmd:" << cmd;
+
+    if (source == "server") {
+        if (cmd == "register_ack") {
+            // ── 注册确认 ──
+            int code = params["code"].toInt(-1);
+            if (code == 0) {
+                m_deviceId = params["device_id"].toInt();
+                m_registered = true;
+                m_statusInfo = QString("online - %1").arg(m_deviceId);
+
+                // 启动心跳
+                m_heartbeatTimer->start(5000);
+                qDebug() << "[agent] registered OK, device_id:" << m_deviceId;
+            } else {
+                m_statusInfo = QString("register failed: %1").arg(params["msg"].toString());
+                qDebug() << "[agent] register failed:" << params["msg"].toString();
+            }
+            emit statusInfoChanged();
+        }
+    }
+
+//    if (cmd == "register_ack") {
+
+
+
+//    } else if (cmd == "content_push") {
+//        // ── 内容推送 ──
+//        QString type = params["type"].toString();
+
+//        if (type == "image") {
+//            QJsonArray resources = params["resources"].toArray();
+//            if (!resources.isEmpty()) {
+//                m_currentImage = resources[0].toObject()["url"].toString();
+//                m_currentText.clear();
+//                emit currentImageChanged();
+//                emit currentTextChanged();
+//                qDebug() << "[agent] image pushed:" << m_currentImage;
+//            }
+//        } else if (type == "text") {
+//            m_currentText  = params["text"].toString();
+//            m_currentImage.clear();
+//            emit currentImageChanged();
+//            emit currentTextChanged();
+//            qDebug() << "[agent] text pushed:" << m_currentText.left(50);
+//        }
+
+//        // 回确认
+//        QJsonObject ack;
+//        ack["cmd"] = QStringLiteral("cmd_ack");
+//        ack["seq"] = ++m_cmdSeq;
+
+//        QJsonObject ap;
+//        ap["cmd"]  = cmd;
+//        ap["code"] = 0;
+//        ap["msg"]  = QStringLiteral("ok");
+//        ack["params"] = ap;
+
+//        sendJson(ack);
+
+//    } else if (cmd == "content_stop") {
+//        // ── 停止播放 ──
+//        m_currentImage.clear();
+//        m_currentText.clear();
+//        emit currentImageChanged();
+//        emit currentTextChanged();
+
+//        QJsonObject ack;
+//        ack["cmd"] = QStringLiteral("cmd_ack");
+//        ack["seq"] = ++m_cmdSeq;
+
+//        QJsonObject ap;
+//        ap["cmd"]  = cmd;
+//        ap["code"] = 0;
+//        ack["params"] = ap;
+
+//        sendJson(ack);
+
+//    } else if (cmd == "screenshot") {
+//        // ── 截屏请求 → QML 端抓图 ──
+//        emit screenshotRequested();
+
+//    } else if (cmd == "heartbeat_ack") {
+//        // ── 心跳确认 ──
+//        qDebug() << "[agent] heartbeat_ack, server_time:" << params["server_time"].toInt();
+
+//    } else if (cmd == "ota_start") {
+//        // ── OTA 升级通知 ──
+//        qDebug() << "[agent] OTA start:" << params["version"].toString()
+//                 << "size:" << params["size"].toInt();
+
+//        QJsonObject ack;
+//        ack["cmd"] = QStringLiteral("cmd_ack");
+//        ack["seq"] = ++m_cmdSeq;
+
+//        QJsonObject ap;
+//        ap["cmd"]  = cmd;
+//        ap["code"] = 0;
+//        ap["msg"]  = QStringLiteral("ota received");
+//        ack["params"] = ap;
+
+//        sendJson(ack);
+
+//    } else {
+//        qDebug() << "[agent] unknown cmd:" << cmd;
+//    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 硬件健康数据读取
+// ═══════════════════════════════════════════════════════════════
+
+QString NetworkManager::readCpuTemp()
+{
+    // ARM: /sys/class/thermal/thermal_zone0/temp
+    QFile file("/sys/class/thermal/thermal_zone0/temp");
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&file);
+        int tempMilli = in.readLine().toInt();
+        file.close();
+        return QString::number(tempMilli / 1000.0, 'f', 1) + "C";
+    }
+    // x86 fallback
+    return "N/A";
+}
+
+int NetworkManager::readMemUsage()
+{
+    QFile file("/proc/meminfo");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return -1;
+
+    QString content = QString::fromUtf8(file.readAll());
+    file.close();
+
+    long total = 0, available = 0;
+    const QStringList lines = content.split('\n');
+    for (const QString& line : lines) {
+        if (line.startsWith("MemTotal:")) {
+            total = line.split(QRegExp("\\s+"))[1].toLong();
+        } else if (line.startsWith("MemAvailable:")) {
+            available = line.split(QRegExp("\\s+"))[1].toLong();
+        }
+    }
+
+    if (total == 0) return -1;
+    return static_cast<int>(100 - (available * 100 / total));
+}
+
+int NetworkManager::readDiskFreeMb()
+{
+    struct statvfs stat;
+    if (statvfs("/", &stat) != 0)
+        return -1;
+
+    unsigned long freeMb = (stat.f_bavail * stat.f_frsize) / (1024 * 1024);
+    return static_cast<int>(freeMb);
+}

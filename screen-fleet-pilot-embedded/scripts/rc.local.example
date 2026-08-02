@@ -1,0 +1,77 @@
+#!/bin/sh -e
+#
+# 复制到板子 /etc/rc.local 使用
+# 串口 / 控制台 + /tmp/screen-fleet-boot.log 都会打印启动提示
+#
+
+CONSOLE=/dev/ttymxc0
+BOOT_LOG=/tmp/screen-fleet-boot.log
+RUN_LOG=/tmp/screen-fleet.log
+
+PROJECT_DIR=/home/root/Projects/screen-fleet-pilot-embedded
+QT_BIN=$PROJECT_DIR/screen-fleet-pilot-embedded
+AGENT_BIN=$PROJECT_DIR/device-agent/build/device-agent
+
+SERVER_IP=8.136.113.168
+SERVER_PORT=8000
+DEVICE_NAME="test A"
+DEVICE_GROUP="floor 1"
+
+say() {
+    MSG="$(date '+%F %T') [rc.local] $*"
+    echo "$MSG" >> "$BOOT_LOG"
+    echo "$MSG" >> "$CONSOLE"
+}
+
+echo 30000 > /proc/sys/vm/min_free_kbytes
+source /etc/profile
+
+export DISPLAY=:0
+ifdown eth1 2>/dev/null || true
+ifup eth1
+
+/usr/sbin/ntpdate -u cn.pool.ntp.org || true
+
+say "======== screen-fleet 开机启动 ========"
+
+mkdir -p /var/lib/device-agent/content
+rm -f /tmp/screen_fleet_pilot.sock
+
+if [ ! -x "$QT_BIN" ]; then
+    say "错误: 找不到 Qt 程序 $QT_BIN"
+    exit 1
+fi
+if [ ! -x "$AGENT_BIN" ]; then
+    say "错误: 找不到 device-agent $AGENT_BIN"
+    exit 1
+fi
+
+chmod a+x "$QT_BIN" "$AGENT_BIN"
+
+say "① 启动 Qt 播放器..."
+cd "$PROJECT_DIR"
+"$QT_BIN" >> "$RUN_LOG" 2>&1 &
+QT_PID=$!
+sleep 2
+
+if kill -0 "$QT_PID" 2>/dev/null; then
+    say "Qt 已启动 OK  pid=$QT_PID"
+else
+    say "Qt 启动失败! 查看: cat $RUN_LOG"
+fi
+
+say "② 启动 device-agent..."
+"$AGENT_BIN" "$SERVER_IP" "$SERVER_PORT" "$DEVICE_NAME" "$DEVICE_GROUP" >> "$RUN_LOG" 2>&1 &
+AGENT_PID=$!
+sleep 1
+
+if kill -0 "$AGENT_PID" 2>/dev/null; then
+    say "device-agent 已启动 OK  pid=$AGENT_PID"
+else
+    say "device-agent 启动失败! 查看: cat $RUN_LOG"
+fi
+
+say "完成. 进程: ps | grep -E 'screen-fleet|device-agent'"
+say "日志: cat $BOOT_LOG  或  cat $RUN_LOG"
+
+exit 0

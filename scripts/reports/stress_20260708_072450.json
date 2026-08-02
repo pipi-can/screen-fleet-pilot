@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-07-08T07:24:50",
+  "host": "8.136.113.168",
+  "port": 8000,
+  "mode": "soak",
+  "all_passed": true,
+  "stages": [
+    {
+      "name": "soak",
+      "target_count": 200,
+      "duration_sec": 900,
+      "started_at": "2026-07-08T07:09:48",
+      "ended_at": "2026-07-08T07:24:50",
+      "elapsed_sec": 901.28,
+      "stats": {
+        "connect_attempts": 200,
+        "connect_ok": 200,
+        "register_ok": 200,
+        "register_fail": 0,
+        "heartbeats_sent": 35711,
+        "unexpected_disconnects": 0,
+        "cmd_received": {
+          "register_ack": 200,
+          "update_embedded_info": 1,
+          "push_resources_to_download": 425
+        }
+      },
+      "registered_at_end": 200,
+      "passed": true,
+      "fail_reason": ""
+    }
+  ]
+}

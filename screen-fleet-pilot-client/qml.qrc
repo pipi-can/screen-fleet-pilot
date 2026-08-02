@@ -1,0 +1,18 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>qml/components/TitleBar.qml</file>
+        <file>qml/components/ColorImage.qml</file>
+        <file>qml/components/ResourceCard.qml</file>
+        <file>qml/components/StatCard.qml</file>
+        <file>qml/components/FuncTabWidget.qml</file>
+        <file>qml/pages/DashboardPage.qml</file>
+        <file>qml/pages/ContentPushPage.qml</file>
+        <file>qml/pages/OTAPage.qml</file>
+        <file>resources/TitleBar/minimize.svg</file>
+        <file>resources/TitleBar/fullscreen.svg</file>
+        <file>resources/TitleBar/exit-fullscreen.svg</file>
+        <file>resources/TitleBar/close.svg</file>
+        <file>resources/app-icon.svg</file>
+    </qresource>
+</RCC>

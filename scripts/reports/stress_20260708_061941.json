@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-07-08T06:19:41",
+  "host": "127.0.0.1",
+  "port": 8000,
+  "mode": "ramp",
+  "all_passed": false,
+  "stages": [
+    {
+      "name": "L1",
+      "target_count": 20,
+      "duration_sec": 300,
+      "started_at": "2026-07-08T06:19:09",
+      "ended_at": "2026-07-08T06:19:41",
+      "elapsed_sec": 31.96,
+      "stats": {
+        "connect_attempts": 20,
+        "connect_ok": 20,
+        "register_ok": 20,
+        "register_fail": 0,
+        "heartbeats_sent": 120,
+        "unexpected_disconnects": 0,
+        "cmd_received": {
+          "register_ack": 20
+        }
+      },
+      "registered_at_end": 20,
+      "passed": false,
+      "fail_reason": "心跳过少 120，期望至少约 600"
+    }
+  ]
+}
