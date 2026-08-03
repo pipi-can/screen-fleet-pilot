@@ -1,0 +1,3 @@
+Protocal Design:
+
+[magic(1 byte)][]

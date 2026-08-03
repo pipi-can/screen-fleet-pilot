@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(screen-fleet-pilot-server VERSION 1.0.0 LANGUAGES CXX)
+project(screen-fleet-pilot-embedded-device-agent VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
 endif()
 
+
 # 根据 project(VERSION 1.0.0) 生成 includes/version.h 到 build 目录
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/includes/version.h.in
@@ -18,34 +19,34 @@ configure_file(
 )
 
 add_subdirectory(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../common
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../common
     ${CMAKE_BINARY_DIR}/sfp_common
 )
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/sources SOURCES)
+aux_source_directory(sources SOURCES)
 
-add_executable(screen-fleet-pilot-server
+add_executable(screen-fleet-pilot-embedded-device-agent
     ${SOURCES}
 )
 
-target_include_directories(screen-fleet-pilot-server
+target_include_directories(screen-fleet-pilot-embedded-device-agent
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/includes
         ${CMAKE_BINARY_DIR}/generated
 )
 
-target_compile_options(screen-fleet-pilot-server 
+target_compile_options(screen-fleet-pilot-embedded-device-agent
     PRIVATE
         -Wall
         -Wextra
 )
 
-target_compile_definitions(screen-fleet-pilot-server 
+target_compile_definitions(screen-fleet-pilot-embedded-device-agent
     PRIVATE
         LINUX
 )
 
-target_link_libraries(screen-fleet-pilot-server
+target_link_libraries(screen-fleet-pilot-embedded-device-agent
     PRIVATE
         sfp_common
 )
