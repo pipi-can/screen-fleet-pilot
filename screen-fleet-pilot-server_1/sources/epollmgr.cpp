@@ -4,6 +4,34 @@
 
 static LogMgr* logger = &LogMgr::getInstance();
 
+// ── Per-FD 读缓冲区（解决逐字节 recv + 半包丢弃）──
+struct FdBuffer {
+    char data[8192];
+    int  len;
+
+    FdBuffer() : len(0) {}
+
+    int append(const char* src, int srcLen) {
+        if (len + srcLen > (int)sizeof(data)) {
+            len = 0;
+            return -1;
+        }
+        memcpy(data + len, src, srcLen);
+        len += srcLen;
+        data[len] = 0;
+        return len;
+    }
+
+    void consume(int consumed) {
+        if (consumed >= len) {
+            len = 0;
+        } else {
+            memmove(data, data + consumed, len - consumed);
+            len -= consumed;
+        }
+    }
+};
+
 EpollMgr::~EpollMgr() {
     if (m_epollFd >= 0) {
         close(m_epollFd);
@@ -140,10 +168,14 @@ void EpollMgr::handleClientMessage(int clientFd) {
                     fdbuf.data[frameLen] = '\0';
                     // 先只打日志，验证切帧对不对
                     logger->logMsg(DEBUG, fdbuf.data, true);
-                    // 下一步换成 parseMessage(clientFd, fdbuf.data);
+                    parseMessage(clientFd, fdbuf.data);
                 }
                 fdbuf.consume(frameLen + 1);
             }
         }
     }
+}
+
+void EpolMgr::parseMessage(int clientFd, char* message) {
+    
 }

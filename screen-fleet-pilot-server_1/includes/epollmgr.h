@@ -11,33 +11,7 @@
 #include <netinet/in.h>
 #include <map>
 
-// ── Per-FD 读缓冲区（解决逐字节 recv + 半包丢弃）──
-struct FdBuffer {
-    char data[8192];
-    int  len;
-
-    FdBuffer() : len(0) {}
-
-    int append(const char* src, int srcLen) {
-        if (len + srcLen > (int)sizeof(data)) {
-            len = 0;
-            return -1;
-        }
-        memcpy(data + len, src, srcLen);
-        len += srcLen;
-        data[len] = 0;
-        return len;
-    }
-
-    void consume(int consumed) {
-        if (consumed >= len) {
-            len = 0;
-        } else {
-            memmove(data, data + consumed, len - consumed);
-            len -= consumed;
-        }
-    }
-};
+extern struct FdBuffer;
 
 class EpollMgr {
 public:
@@ -53,11 +27,12 @@ public:
     void addFd(int fd, uint32_t events);
     static void setNonBlock(int fd);
     void wait();
-    
-    int getEpollFd() const { return m_epollFd; }
-
     void handleNewClient(int socketFd);
     void handleClientMessage(int clientFd);
+    void parseMessage(int clientFd, char* message);
+
+    int getEpollFd() const { return m_epollFd; }
+
 
 private: 
     EpollMgr() = default;

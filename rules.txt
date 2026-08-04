@@ -1,3 +1,468 @@
-Protocal Design:
+================================================================================
+Screen Fleet Pilot — JSON 协议约定 (JSON/1)
+================================================================================
 
-[magic(1 byte)][]
+适用范围
+--------
+  1. TCP 三端长连接：client ↔ server ↔ embedded(device-agent)
+  2. 设备端双进程 IPC：device-agent ↔ Qt 播放器（Unix Domain Socket）
+  3. 设备端本地持久化：playlist.json / schedule.json
+
+  三处均使用 JSON 对象；除本地文件外，线上以 JSON Lines 传输（一行一条）。
+
+
+================================================================================
+一、传输与切帧
+================================================================================
+
+1.1 JSON Lines（TCP / Unix Socket）
+  - 编码：UTF-8，Compact JSON（无多余空白），行尾 `\n`
+  - 兼容：接收方可 trim `\r`（`\r\n`）
+  - 发送：`QJsonDocument::Compact + '\n'` / `json_object_to_json_string_ext(PLAIN) + '\n'`
+
+1.2 粘包 / 半包
+  - TCP 与 Unix Stream 均为字节流，必须在应用层按 `\n` 切帧
+  - 每连接维护读缓冲区（FdBuffer），切出完整行后再 json parse
+  - epoll ET 模式：循环 read 直到 EAGAIN，再批量切帧
+
+1.3 本地 JSON 文件
+  - playlist.json / schedule.json：单个 JSON 对象，可带尾随 `\n`
+  - 写入建议：先写 `.tmp`，再 rename，避免 player 读到半截
+
+1.4 约束
+  - 单行建议 ≤ 8192 字节（device-agent notify_qt 当前上限 4096，可酌情放大）
+  - 解析失败：打日志并丢弃该行，不断连（除非连续失败过多）
+
+
+================================================================================
+二、消息信封（Envelope）
+================================================================================
+
+2.1 TCP 三端通用结构
+
+  {
+    "source": "client | server | embedded",
+    "cmd": "<指令名>",
+    "seq": 1,
+    "timestamp": 1718347200,
+    "device_id": 3,
+    "params": { }
+  }
+
+  字段          类型      必填    说明
+  ------------  --------  ------  ------------------------------------------
+  source        string    是      发送方：client / server / embedded
+  cmd           string    是      指令名，见第三节
+  seq           number    否      序列号，client/embedded 发包递增；server 回包可为 0
+  timestamp     number    否      Unix 秒，client 侧常用
+  device_id     number    否      注册后由 server 分配；心跳时 embedded/client 携带
+  params        object    否      业务参数，无参数时 `{}` 或省略（实现侧应兼容）
+
+2.2 设备端 IPC（Unix Socket）
+
+  agent → player / player → agent 使用扁平 JSON，无 source 字段：
+
+  { "cmd": "<指令名>", ...其他字段... }
+
+  或带 params 嵌套（与 TCP 保持一致亦可，当前实现以扁平为主）。
+
+2.3 本地文件
+
+  playlist.json / schedule.json 仅含业务字段 + cmd，无 source / seq。
+
+
+================================================================================
+三、指令一览
+================================================================================
+
+  方向                    cmd
+  ----------------------  ------------------------------------------
+  embedded → server       register, heartbeat, update_info_ack,
+                          screenshot_data, ota_update_ack
+  client → server         register, fetch_devices, heartbeat,
+                          request_update_embedded, request_file_list,
+                          request_firmware_list, mask_device,
+                          request_push_content_to_embedded,
+                          request_screenshot, request_schedule_push,
+                          request_ota_update, request_check_firmware
+  server → embedded       register_ack, update_embedded_info,
+                          push_resources_to_download, push_schedule_playlist,
+                          request_screenshot, ota_update
+  server → client         register_ack, fetch_devices_ack,
+                          update_embedded_info_result, request_filelist_ack,
+                          request_firmware_list_ack, mask_device_ack,
+                          request_screenshot_ack, check_firmware_ack,
+                          ota_update_ack
+  agent → player (IPC)    content_ready, schedule_ready, screenshot_request
+  player → agent (IPC)    screenshot_ready
+
+
+================================================================================
+四、TCP 指令 params 约定
+================================================================================
+
+------------------------------------------------------------------------------
+4.1 register（client / embedded → server）
+------------------------------------------------------------------------------
+  params:
+    name        string    设备/客户端显示名
+    group       string    分组
+    version     string    版本号
+    device_uid  string    唯一 ID（MAC / UUID / 模拟器 ID）
+
+------------------------------------------------------------------------------
+4.2 register_ack（server → client / embedded）
+------------------------------------------------------------------------------
+  params:
+    code        number    0=成功
+    device_id   number    server 分配的连接 ID
+    msg         string    如 "ok"
+
+------------------------------------------------------------------------------
+4.3 heartbeat
+------------------------------------------------------------------------------
+  (A) embedded → server
+      顶层 device_id: number
+      params:
+        cpu_temp        string    摄氏温度，如 "52"
+        mem_usage       number    0-100
+        disk_free_mb    number
+        current_content string    可选
+        timestamp       number    设备本地 Unix 秒（定时双模式判钟用）
+
+  (B) client → server
+      顶层 device_id: number
+      params: {} 或省略
+
+  服务端 30s 无 heartbeat 判 embedded 离线。
+
+------------------------------------------------------------------------------
+4.4 fetch_devices（client → server）
+------------------------------------------------------------------------------
+  params: {}
+
+------------------------------------------------------------------------------
+4.5 fetch_devices_ack（server → client）
+------------------------------------------------------------------------------
+  params:
+    devices     array of object:
+      device_uid    string
+      name          string
+      group         string
+      id            number    在线为真实 ID，离线 = -1
+      version       string
+      temperature   string    离线可 ""
+      mem_usage     number
+      disk_free_mb  number
+      online        boolean
+
+------------------------------------------------------------------------------
+4.6 request_update_embedded（client → server）
+------------------------------------------------------------------------------
+  params:
+    device_uid  string
+    group       string
+    name        string
+
+------------------------------------------------------------------------------
+4.7 update_embedded_info（server → embedded）
+------------------------------------------------------------------------------
+  params:
+    device_uid  string
+    sender      number    发起编辑的 client 连接 fd（内部路由用）
+    group       string
+    name        string
+
+------------------------------------------------------------------------------
+4.8 update_info_ack（embedded → server）
+------------------------------------------------------------------------------
+  params:
+    msg         string    "ok" 表示成功
+    sender      number
+    group       string
+    name        string
+
+------------------------------------------------------------------------------
+4.9 update_embedded_info_result（server → client）
+------------------------------------------------------------------------------
+  params:
+    status      string    "ok" / 其他
+
+------------------------------------------------------------------------------
+4.10 request_file_list（client → server）
+------------------------------------------------------------------------------
+  params: {}
+
+------------------------------------------------------------------------------
+4.11 request_filelist_ack（server → client）
+------------------------------------------------------------------------------
+  params:
+    count       number
+    files       array of object:
+      path        string    如 /uploads/xxx.jpg
+      name        string
+      size        number
+
+------------------------------------------------------------------------------
+4.12 request_firmware_list（client → server）
+------------------------------------------------------------------------------
+  params: {}
+
+------------------------------------------------------------------------------
+4.13 request_firmware_list_ack（server → client）
+------------------------------------------------------------------------------
+  params:
+    count       number
+    firmwares   array of object:
+      path          string
+      name          string
+      size          number
+      version       string
+      pack_time     string
+      changelog     string
+      executables   array of string
+      files         array of { "name": string, "size": number }
+
+  client 兼容 cmd 别名：request_firmwarelist_ack；firmwares 别名：files
+
+------------------------------------------------------------------------------
+4.14 mask_device（client → server）
+------------------------------------------------------------------------------
+  params:
+    device_uid  string
+
+------------------------------------------------------------------------------
+4.15 mask_device_ack（server → client）
+------------------------------------------------------------------------------
+  params:
+    code        number
+    device_uid  string
+    msg         string
+
+------------------------------------------------------------------------------
+4.16 request_push_content_to_embedded（client → server）
+------------------------------------------------------------------------------
+  params:
+    device_uids   array of string
+    paths         array of string    服务器相对路径，如 /uploads/a.jpg
+
+  server 拼装 HTTP URL 后向每台 embedded 下发 push_resources_to_download。
+
+------------------------------------------------------------------------------
+4.17 push_resources_to_download（server → embedded）
+------------------------------------------------------------------------------
+  params:
+    paths       array of string    完整 HTTP URL
+
+  embedded 下载后写 playlist.json，IPC 通知 player（见第六节）。
+
+------------------------------------------------------------------------------
+4.18 request_schedule_push（client → server）
+------------------------------------------------------------------------------
+  params:
+    device_uids     array of string
+    paths           array of string
+    schedule_date   string    "YYYY-MM-DD"
+    schedule_time   string    "HH:MM"
+    duration_sec    number
+
+  服务端双模式：
+    - 设备时钟可信（|server - device timestamp| ≤ 60s）→ push_schedule_playlist
+    - 不可信 → SQLite + timerfd 到点代为 push_resources_to_download
+
+------------------------------------------------------------------------------
+4.19 push_schedule_playlist（server → embedded）
+------------------------------------------------------------------------------
+  params:
+    paths           array of string    完整 HTTP URL
+    schedule_date   string
+    schedule_time   string
+    duration_sec    number
+
+------------------------------------------------------------------------------
+4.20 request_screenshot（client → server）
+------------------------------------------------------------------------------
+  params:
+    device_uid  string
+
+------------------------------------------------------------------------------
+4.21 request_screenshot（server → embedded）
+------------------------------------------------------------------------------
+  注意：与 client→server 同名 cmd，靠 source=server 区分。
+  params:
+    device_id   number    管理后台 connection id（非 embedded id）
+
+------------------------------------------------------------------------------
+4.22 screenshot_data（embedded → server）
+------------------------------------------------------------------------------
+  params:
+    device_id   number    client connection id
+    path        string    截图 HTTP 相对路径
+
+  server 转发 request_screenshot_ack 给对应 client。
+
+------------------------------------------------------------------------------
+4.23 request_screenshot_ack（server → client）
+------------------------------------------------------------------------------
+  params:
+    path        string
+
+------------------------------------------------------------------------------
+4.24 request_ota_update（client → server）
+------------------------------------------------------------------------------
+  params:
+    device_uids   array of string
+    path          string    如 /firmwares/xxx.tgz
+    device_uid    string    管理后台 UID（非终端 UID），用于回传路由
+
+------------------------------------------------------------------------------
+4.25 ota_update（server → embedded）
+------------------------------------------------------------------------------
+  params:
+    path          string    服务器相对路径
+    md5           string    32 位 hex
+    device_uid    string    管理后台 UID
+
+------------------------------------------------------------------------------
+4.26 ota_update_ack（embedded → server → client）
+------------------------------------------------------------------------------
+  embedded → server  params:
+    code          number    0=成功 -1=失败
+    result        number    1=升级成功 0=失败或仅下载
+    msg           string
+    path          string
+    local_path    string
+    device_uid    string
+
+  server → client  params（转发，字段精简）:
+    result        number
+    path          string    可选
+
+------------------------------------------------------------------------------
+4.27 request_check_firmware（client → server）
+------------------------------------------------------------------------------
+  params:
+    path        string
+    md5         string    32 位 hex
+
+------------------------------------------------------------------------------
+4.28 check_firmware_ack（server → client）
+------------------------------------------------------------------------------
+  params:
+    result      number    1=匹配 0=不匹配
+
+
+================================================================================
+五、设备端 IPC 约定（Unix Socket）
+================================================================================
+
+  通道：/tmp/screen_fleet_pilot.sock
+  格式：JSON Lines（与 TCP 相同切帧逻辑）
+  连接：Qt ContentPlayer listen，device-agent connect
+
+  cmd                 方向              JSON 示例
+  ------------------  ----------------  ------------------------------------
+  content_ready       agent → player    {"cmd":"content_ready","paths":["/var/.../a.jpg"]}
+  schedule_ready      agent → player    {"cmd":"schedule_ready"}
+  screenshot_request  agent → player    {"cmd":"screenshot_request","device_id":3}
+  screenshot_ready    player → agent    {"cmd":"screenshot_ready","device_id":3,"path":"/var/.../shot.png"}
+
+
+================================================================================
+六、本地 JSON 文件
+================================================================================
+
+6.1 playlist.json
+  路径：/var/lib/device-agent/content/playlist.json
+  内容：
+  {
+    "cmd": "content_ready",
+    "paths": ["/var/lib/device-agent/content/xxx.jpg", ...]
+  }
+  由 agent 在 HTTP 下载完成后写入；player 启动时可冷读，运行时以 IPC 为准。
+
+6.2 schedule.json
+  路径：/var/lib/device-agent/content/schedule.json
+  内容：
+  {
+    "cmd": "schedule_playlist",
+    "schedule_date": "2026-07-08",
+    "schedule_time": "08:00",
+    "duration_sec": 300,
+    "paths": ["http://..."],
+    "local_paths": ["/var/lib/device-agent/content/xxx.jpg", ...]
+  }
+  player 读 local_paths 播放；paths 供 agent 下载阶段使用。
+
+  schedule_date + schedule_time 格式：
+    player 解析 "yyyy-MM-dd HH:mm:ss" 或 "yyyy-MM-dd HH:mm"
+
+
+================================================================================
+七、实现约定
+================================================================================
+
+7.1 依赖
+  server / device-agent：json-c
+  client / player：Qt QJsonDocument
+
+7.2 分发
+  先读 cmd 字符串，再读 params；unknown cmd 打日志丢弃，不断连。
+
+7.3 兼容扩展
+  - 新增 params 字段：旧端忽略未知 key
+  - 新增 cmd：旧端丢弃；新 cmd 需同步更新三端 + 模拟器 + 本文档
+  - 不要复用 cmd 名变更语义（除非同时升版本并做兼容层）
+
+7.4 seq / timestamp
+  - seq：client 侧 m_cmdSeq / embedded msgSeq 递增，便于日志关联
+  - timestamp：client 请求可选；embedded heartbeat.params.timestamp 用于服务端判钟
+
+7.5 URL 与路径
+  - 推送 paths：client 传服务器相对路径 `/uploads/...`
+  - server → embedded：拼成 `http://<SERVER_IP>/uploads/...`
+  - 截图 / OTA 结果 path：HTTP 相对路径，client 自行拼 base URL
+
+
+================================================================================
+八、典型时序（仅列 JSON cmd）
+================================================================================
+
+  注册：
+    embedded --register--> server --register_ack--> embedded
+
+  保活：
+    embedded --heartbeat--> server
+    client --fetch_devices--> server --fetch_devices_ack--> client
+
+  立即推送：
+    client --request_push_content_to_embedded-->
+    server --push_resources_to_download--> embedded
+    agent 写 playlist.json + IPC content_ready --> player
+
+  定时推送（时钟可信）：
+    client --request_schedule_push-->
+    server --push_schedule_playlist--> embedded
+    agent 写 schedule.json + IPC schedule_ready --> player
+
+  远程截屏：
+    client --request_screenshot--> server --request_screenshot--> embedded
+    agent IPC screenshot_request --> player
+    player IPC screenshot_ready --> agent
+    embedded --screenshot_data--> server --request_screenshot_ack--> client
+
+  OTA：
+    client --request_ota_update--> server --ota_update--> embedded
+    embedded --ota_update_ack--> server --ota_update_ack--> client
+
+
+================================================================================
+九、后续可优化（仍保持 JSON，不在此版本做二进制）
+================================================================================
+
+  - 缩短 JSON key（如 "cmd"→"c"）需三端同步，收益有限
+  - 心跳合并：减少 fetch_devices 频率 vs 服务端推送在线状态（架构变更）
+  - 大列表分页：fetch_devices_ack 设备数 >500 时按组拉取
+  - schema 校验：可选 JSON Schema 做开发期校验，运行时仍以宽松解析为主
+
+================================================================================
