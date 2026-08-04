@@ -176,6 +176,12 @@ void EpollMgr::handleClientMessage(int clientFd) {
     }
 }
 
-void EpolMgr::parseMessage(int clientFd, char* message) {
-    
+void EpollMgr::parseMessage(int clientFd, char* message) {
+    RegisterBag bag;
+    bag.loadFromJsonString(message);
+    if (bag.source == "embedded" && bag.cmd == "register") {
+        handleEmbeddedRegister(clientFd, bag);
+        return;
+    }
 }
+

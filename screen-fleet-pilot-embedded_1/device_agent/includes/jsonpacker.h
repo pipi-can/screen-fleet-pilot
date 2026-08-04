@@ -2,11 +2,10 @@
 #define JSONPACKER_H
 
 extern "C" {
+#include <string.h>
 #include <json-c/json.h>
 }
-#include <memory>
-
-extern struct RegisterBag;
+#include <string>
 
 enum JsonPackerType {
     REGISTER = 0, 

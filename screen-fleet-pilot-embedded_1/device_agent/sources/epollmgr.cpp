@@ -40,7 +40,7 @@ void EpollMgr::addFd(int fd, uint32_t events) {
 
 void EpollMgr::wait() {
     struct epoll_event events[16];
-
+    
     while (true) {
         int readyFds = epoll_wait(m_epollFd, events, 16, -1);
         if (readyFds == -1) {

@@ -6,10 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(sfp_common STATIC
-    sources/logmgr.cpp
+    utils/sources/logmgr.cpp
+    protocals/sources/json_bags.cpp
 )
 
 target_include_directories(sfp_common
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/includes
+        ${CMAKE_CURRENT_SOURCE_DIR}/utils/includes
+        ${CMAKE_CURRENT_SOURCE_DIR}/protocals/includes
 )

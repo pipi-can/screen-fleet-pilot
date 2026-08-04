@@ -17,6 +17,7 @@ int main()
     EpollMgr::getInstance().init();
     // LT 模式：仅 EPOLLIN，不加 EPOLLET
     EpollMgr::getInstance().addFd(Client::getInstance().getSocketFd(), EPOLLIN);
+    Client::getInstance().requestRegisterToServer();
     EpollMgr::getInstance().wait();
 
     return 0;
