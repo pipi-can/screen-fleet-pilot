@@ -1,17 +1,19 @@
 #ifndef EPOLLMGR_H
 #define EPOLLMGR_H
+
+#include <cstdint>
+#include <map>
 #include <sys/types.h>
 #include <sys/epoll.h>
 #include <fcntl.h>
-#include "global_def.h"
 #include <errno.h>
 #include <unistd.h>
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <map>
-
-extern struct FdBuffer;
+#include "global_def.h"
+#include "fdbuffer.h"
+#include "serverparser.h"
 
 class EpollMgr {
 public:

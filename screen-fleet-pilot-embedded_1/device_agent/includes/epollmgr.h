@@ -1,8 +1,11 @@
 #ifndef EPOLLMGR_H
 #define EPOLLMGR_H
 
+#include <cstdint>
+#include <map>
 #include <sys/epoll.h>
 #include "global_def.h"
+#include "fdbuffer.h"
 
 class EpollMgr {
 public:
@@ -23,9 +26,11 @@ private:
     ~EpollMgr();
 
     bool handleServerMessage(int serverFd);
+    void parseMessage(int serverFd, char* message);
     void closeServerFd(int serverFd);
 
     int m_epollFd = -1;
+    std::map<int, FdBuffer> m_fd2BufferMap;
 };
 
 #endif

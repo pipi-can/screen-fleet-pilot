@@ -1,7 +1,39 @@
 #include "../includes/socketmgr.h"
 #include "logmgr.h"
+#include <cerrno>
+#include <cstdio>
+#include <sys/socket.h>
+#include <unistd.h>
 
 static LogMgr* logger = &LogMgr::getInstance();
+
+bool SocketMgr::sendMessage(int fd, const std::string& json) {
+    if (fd < 0) {
+        logger->logMsg(ERROR, "sendMessage: invalid fd", true);
+        return false;
+    }
+
+    std::string packet = json;
+    packet.push_back('\n');
+
+    ssize_t totalSent = 0;
+    const char* ptr = packet.c_str();
+    const size_t packetLen = packet.size();
+    while (totalSent < static_cast<ssize_t>(packetLen)) {
+        ssize_t sent = send(fd, ptr + totalSent,
+                            packetLen - totalSent, MSG_NOSIGNAL);
+        if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                continue;
+            }
+            logger->logMsg(ERROR, "sendMessage: send failed", true);
+            perror("\t\tsend error");
+            return false;
+        }
+        totalSent += sent;
+    }
+    return true;
+}
 
 SocketMgr::~SocketMgr() {
     if (m_socketFd >= 0) {

@@ -48,4 +48,6 @@ target_compile_definitions(screen-fleet-pilot-server
 target_link_libraries(screen-fleet-pilot-server
     PRIVATE
         sfp_common
+        sqlite3
+        json-c
 )

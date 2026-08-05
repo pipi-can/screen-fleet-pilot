@@ -116,7 +116,7 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
   params:
     code        number    0=成功
     device_id   number    server 分配的连接 ID
-    msg         string    如 "ok"
+    msg         string    如 "ok" 表示新设备注册成功，"repeated" 表示已经注册过了
 
 ------------------------------------------------------------------------------
 4.3 heartbeat

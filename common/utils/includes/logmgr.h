@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <mutex>
+#include <string>
 extern "C" {
 #include <stdio.h>
 #include <pthread.h>

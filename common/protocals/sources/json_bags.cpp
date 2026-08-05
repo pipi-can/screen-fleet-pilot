@@ -1,4 +1,5 @@
 #include "../includes/json_bags.h"
+#include <cstdlib>
 
 static bool readStringField(struct json_object* parent, const char* key, std::string& out) {
     struct json_object* obj = nullptr;
@@ -72,6 +73,75 @@ void RegisterBag::loadFromJsonString(char* str) {
         readStringField(paramsObj, "group", group);
         readStringField(paramsObj, "version", version);
         readStringField(paramsObj, "device_uid", deviceUid);
+    }
+
+    json_object_put(root);
+}
+
+struct json_object* RegisterAckBag::toJsonObject() {
+    if (!checkValid()) {
+        return nullptr;
+    }
+
+    struct json_object* root = packHead();
+    if (!root) {
+        return nullptr;
+    }
+
+    struct json_object* paramsObj = json_object_new_object();
+    json_object_object_add(paramsObj, "code",      json_object_new_int(code));
+    json_object_object_add(paramsObj, "device_id", json_object_new_int(static_cast<int>(deviceId)));
+    json_object_object_add(paramsObj, "msg",       json_object_new_string(message.c_str()));
+    json_object_object_add(root, "params", paramsObj);
+    return root;
+}
+
+char* RegisterAckBag::toJsonString() {
+    struct json_object* root = toJsonObject();
+    if (!root) {
+        return nullptr;
+    }
+    const char* jsonStr = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    char* result = strdup(jsonStr);
+    json_object_put(root);
+    return result;
+}
+
+void RegisterAckBag::loadFromJsonString(char* str) {
+    if (!str) {
+        return;
+    }
+
+    struct json_object* root = json_tokener_parse(str);
+    if (!root) {
+        return;
+    }
+
+    struct json_object* obj = nullptr;
+
+    readStringField(root, "source", source);
+    readStringField(root, "cmd", cmd);
+
+    if (json_object_object_get_ex(root, "seq", &obj)) {
+        seq = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "timestamp", &obj)) {
+        timestamp = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "device_id", &obj)) {
+        JsonBag::deviceId = json_object_get_int(obj);
+    }
+
+    struct json_object* paramsObj = nullptr;
+    if (json_object_object_get_ex(root, "params", &paramsObj)
+        && json_object_is_type(paramsObj, json_type_object)) {
+        if (json_object_object_get_ex(paramsObj, "code", &obj)) {
+            code = json_object_get_int(obj);
+        }
+        if (json_object_object_get_ex(paramsObj, "device_id", &obj)) {
+            deviceId = static_cast<uint32_t>(json_object_get_int(obj));
+        }
+        readStringField(paramsObj, "msg", message);
     }
 
     json_object_put(root);

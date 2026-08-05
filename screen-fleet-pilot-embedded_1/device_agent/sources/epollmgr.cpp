@@ -1,7 +1,10 @@
 #include "../includes/epollmgr.h"
 #include "../includes/client.h"
+#include "../includes/embeddedparser.h"
 #include "logmgr.h"
+#include "jsonparser.h"
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <unistd.h>
@@ -40,7 +43,7 @@ void EpollMgr::addFd(int fd, uint32_t events) {
 
 void EpollMgr::wait() {
     struct epoll_event events[16];
-    
+
     while (true) {
         int readyFds = epoll_wait(m_epollFd, events, 16, -1);
         if (readyFds == -1) {
@@ -56,7 +59,7 @@ void EpollMgr::wait() {
             int fd = events[i].data.fd;
             if (fd == Client::getInstance().getSocketFd()) {
                 if (!handleServerMessage(fd)) {
-                    return;
+                    logger->logMsg(ERROR, "handle server message failed", true);
                 }
             }
         }
@@ -65,6 +68,7 @@ void EpollMgr::wait() {
 
 bool EpollMgr::handleServerMessage(int serverFd) {
     char buffer[4096];
+    memset(buffer, 0, sizeof(buffer));
     ssize_t bytesRead = recv(serverFd, buffer, sizeof(buffer), 0);
     if (bytesRead < 0) {
         logger->logMsg(ERROR, "recv from server failed", true);
@@ -78,12 +82,38 @@ bool EpollMgr::handleServerMessage(int serverFd) {
         return false;
     }
 
-    logger->logMsg(DEBUG, "received data from server, bytes: "
-        + std::to_string(bytesRead), true);
+    FdBuffer& fdbuf = m_fd2BufferMap[serverFd];
+    if (fdbuf.append(buffer, static_cast<int>(bytesRead)) < 0) {
+        logger->logMsg(ERROR, "server message buffer overflow", true);
+        return false;
+    }
+
+    while (true) {
+        char* nl = static_cast<char*>(memchr(fdbuf.data, '\n', fdbuf.len));
+        if (!nl) {
+            break;
+        }
+        int frameLen = nl - fdbuf.data;
+        if (frameLen > 0 && fdbuf.data[frameLen - 1] == '\r') {
+            frameLen--;
+        }
+        if (frameLen > 0) {
+            fdbuf.data[frameLen] = '\0';
+            logger->logMsg(DEBUG, fdbuf.data, true);
+            parseMessage(serverFd, fdbuf.data);
+        }
+        fdbuf.consume(frameLen + 1);
+    }
     return true;
+}
+
+void EpollMgr::parseMessage(int serverFd, char* message) {
+    JsonBagBasic basic = JsonParser::parseBasic(message);
+    EmbeddedParser::getInstance().parseMessage(ParserContext(serverFd, basic, message));
 }
 
 void EpollMgr::closeServerFd(int serverFd) {
     epoll_ctl(m_epollFd, EPOLL_CTL_DEL, serverFd, nullptr);
     close(serverFd);
+    m_fd2BufferMap.erase(serverFd);
 }

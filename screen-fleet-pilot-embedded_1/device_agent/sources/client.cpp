@@ -1,7 +1,9 @@
 #include "../includes/client.h"
 #include "logmgr.h"
 #include <arpa/inet.h>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <unistd.h>
 
 static LogMgr* logger = &LogMgr::getInstance();
@@ -57,11 +59,12 @@ void Client::connectToServer() {
 void Client::requestRegisterToServer() {
     if (m_registered) return ;
     RegisterBag registerBag;
-    registerBag.deviceUid = m_metaMessage.deviceUid;
-    registerBag.name = m_metaMessage.deviceName;
-    registerBag.group = m_metaMessage.deviceGroup;
-    registerBag.version = m_metaMessage.deviceVersion;
-    const char* jsonStr = registerBag.toJsonString();
+    registerBag.deviceUid   = m_metaMessage.deviceUid;
+    registerBag.name        = m_metaMessage.deviceName;
+    registerBag.group       = m_metaMessage.deviceGroup;
+    registerBag.version     = m_metaMessage.deviceVersion;
+    registerBag.seq         = ++m_seqToServer;
+    const char* jsonStr     = registerBag.toJsonString();
     if (!jsonStr) {
         logger->logMsg(ERROR, "failed to create register JSON", true);
         return;
@@ -71,6 +74,7 @@ void Client::requestRegisterToServer() {
     } else {
         logger->logMsg(DEBUG, "register message sent to server: " + std::string(jsonStr), true);
     }
+    free(jsonStr);
 }
 
 bool Client::sendMessageToServer(const char* message) {
@@ -94,7 +98,7 @@ bool Client::sendMessageToServer(const char* message) {
         }
         totalSent += sent;
     }
-    free(msgWithNewline);
+    delete[] msgWithNewline;
 
     logger->logMsg(DEBUG, "sent message to server: " + std::string(message), true);
     return true;

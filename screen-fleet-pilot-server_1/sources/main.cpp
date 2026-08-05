@@ -1,4 +1,5 @@
 #include "../includes/main.h"
+#include "../includes/databasemgr.h"
 #include "version.h"
 #include <iostream>
 #include <string>
@@ -12,6 +13,8 @@ int main()
 
     const std::string versionMsg = std::string(PROJECT_NAME) + " v" + PROJECT_VERSION;
     LogMgr::getInstance().logMsg(DEBUG, versionMsg.c_str(), true);
+
+    DatabaseMgr::getInstance().init();
 
     EpollMgr::getInstance().init();
     SocketMgr::getInstance().init();

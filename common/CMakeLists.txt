@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(sfp_common STATIC
     utils/sources/logmgr.cpp
     protocals/sources/json_bags.cpp
+    protocals/sources/jsonparser.cpp
 )
 
 target_include_directories(sfp_common

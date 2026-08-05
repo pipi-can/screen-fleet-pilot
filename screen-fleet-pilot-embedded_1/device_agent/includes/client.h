@@ -1,6 +1,10 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
+#include <string>
+#include <cstring>
+#include <cstdio>
+
 extern "C" {
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -9,7 +13,6 @@ extern "C" {
 #include <fcntl.h>
 }
 #include "global_def.h"
-#include "jsonpacker.h"
 #include "logmgr.h"
 #include "json_bags.h"
 
@@ -180,6 +183,8 @@ private:
 
     int     m_socketFd = -1;
     bool    m_registered = false;
+    int     m_seqToServer = 0;
+    int     m_seqToQt     = 0;
     ClientMetaMessage m_metaMessage;
 };
 

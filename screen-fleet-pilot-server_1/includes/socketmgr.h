@@ -6,6 +6,7 @@ extern "C" {
 #include <sys/socket.h>    
 #include <netinet/in.h>
 }
+#include <string>
 #include "global_def.h"
 
 class SocketMgr {
@@ -20,12 +21,13 @@ public:
 
     void init();
     int getSocketFd() { return m_socketFd; }
+    static bool sendMessage(int fd, const std::string& json);
 
 private:
     SocketMgr() = default;
     ~SocketMgr();
 
-    int m_socketFd;
+    int m_socketFd = -1;
 };
 
 #endif
