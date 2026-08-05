@@ -7,6 +7,7 @@
 #include "global_def.h"
 #include "fdbuffer.h"
 
+
 class EpollMgr {
 public:
     EpollMgr(const EpollMgr& other) = delete;
@@ -26,6 +27,7 @@ private:
     ~EpollMgr();
 
     bool handleServerMessage(int serverFd);
+    void handleHeartBeatTimer(int timerFd);
     void parseMessage(int serverFd, char* message);
     void closeServerFd(int serverFd);
 

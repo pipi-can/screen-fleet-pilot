@@ -10,7 +10,7 @@ public:
     virtual ~JsonParser() = default;
 
     static JsonBagBasic parseBasic(char* jsonStr);
-    virtual void parseMessage(ParserContext& parserCtx) = 0;
+    virtual void parseMessage(ParserContext parserCtx) = 0;
 
 protected:
     JsonParser() = default;

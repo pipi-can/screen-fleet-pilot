@@ -6,4 +6,5 @@
 #define MAX_CONNECT_TIME    20
 #define DEVICE_MESSAGE_PATH "/var/lib/device-agent/device_message.json"
 
+#define HEARTBEAT_INTERVAL  5
 #endif

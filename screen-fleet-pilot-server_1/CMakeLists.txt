@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+find_library(JSONC_STATIC libjson-c.a)
+
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
@@ -49,5 +51,5 @@ target_link_libraries(screen-fleet-pilot-server
     PRIVATE
         sfp_common
         sqlite3
-        json-c
+        ${JSONC_STATIC}
 )

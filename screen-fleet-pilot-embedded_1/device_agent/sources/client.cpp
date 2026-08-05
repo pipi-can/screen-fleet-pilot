@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <sys/time.h>
 #include <unistd.h>
 
 static LogMgr* logger = &LogMgr::getInstance();
@@ -56,6 +57,30 @@ void Client::connectToServer() {
     logger->logMsg(DEBUG, "connect to server success", true);
 }
 
+void Client::initHeartbeatTimer() {
+    if (this->m_heartbeatFd != -1) return ;
+    this->m_heartbeatFd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+    if (m_heartbeatFd < 0) {
+        logger->logMsg(ERROR, "create heartbeat timerfd failed", true);
+        perror("\t\tcreate timerfd failed");
+        return ;
+    }
+    EpollMgr::getInstance().addFd(m_heartbeatFd, EPOLLIN);
+    struct itimerspec its;
+    its.it_value.tv_sec = HEARTBEAT_INTERVAL;
+    its.it_value.tv_nsec = 0;
+    its.it_interval.tv_sec = HEARTBEAT_INTERVAL;
+    its.it_interval.tv_nsec = 0;
+    int ret = timerfd_settime(this->m_heartbeatFd, 0, &its, NULL);
+    if (ret < 0) {
+        logger->logMsg(ERROR, "set timer failed", true);
+        perror("\t\tset time failed");
+        close(m_heartbeatFd);
+        m_heartbeatFd = -1;
+        return ;
+    }
+}
+
 void Client::requestRegisterToServer() {
     if (m_registered) return ;
     RegisterBag registerBag;
@@ -64,7 +89,7 @@ void Client::requestRegisterToServer() {
     registerBag.group       = m_metaMessage.deviceGroup;
     registerBag.version     = m_metaMessage.deviceVersion;
     registerBag.seq         = ++m_seqToServer;
-    const char* jsonStr     = registerBag.toJsonString();
+    char* jsonStr     = registerBag.toJsonString();
     if (!jsonStr) {
         logger->logMsg(ERROR, "failed to create register JSON", true);
         return;

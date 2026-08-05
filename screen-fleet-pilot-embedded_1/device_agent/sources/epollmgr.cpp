@@ -61,6 +61,8 @@ void EpollMgr::wait() {
                 if (!handleServerMessage(fd)) {
                     logger->logMsg(ERROR, "handle server message failed", true);
                 }
+            } else if (fd == Client::getInstance().getHeartbeatTimerFd()) {
+
             }
         }
     }
@@ -105,6 +107,16 @@ bool EpollMgr::handleServerMessage(int serverFd) {
         fdbuf.consume(frameLen + 1);
     }
     return true;
+}
+
+void EpollMgr::handleHeartBeatTimer(int timerFd) {
+    uint64_t exp;
+    ssize_t readBytes = read(timerFd, &exp, sizeof(exp));
+    if (readBytes < 0) {
+        logger->logMsg(ERROR, "read heartbeat timer failed", true);
+        perror("\t\tread heartbeat timer");
+        return ;
+    }
 }
 
 void EpollMgr::parseMessage(int serverFd, char* message) {

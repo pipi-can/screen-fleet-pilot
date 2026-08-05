@@ -2,10 +2,10 @@
 #define EMBEDDEDPARSER_H
 
 #include "jsonparser.h"
-
+#include "client.h"
 class RegisterAckHandler: public JsonBagHandler {
 public: 
-    void action(const ParserContext& parserCtx) override;
+    void action(const ParserContext parserCtx) override;
 };
 
 class EmbeddedParser: public JsonParser {
@@ -18,7 +18,7 @@ public:
         return instance;
     }
 
-    void parseMessage(ParserContext& parserCtx) override;
+    void parseMessage(ParserContext parserCtx) override;
 
 private:
     EmbeddedParser() = default;

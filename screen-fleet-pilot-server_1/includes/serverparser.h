@@ -14,8 +14,8 @@ public:
         std::string msg;
         int         clientFd;
     };
-    void action(const ParserContext& parserCtx) override;
-    void reply(const RegisterContext& registerCtx);
+    void action(const ParserContext parserCtx) override;
+    void reply(const RegisterContext registerCtx);
 
     static int distributeId;
 };
@@ -30,7 +30,7 @@ public:
         return instance;
     }
 
-    void parseMessage(ParserContext& parserCtx) override;
+    void parseMessage(ParserContext parserCtx) override;
 
 private:
     ServerParser() = default;

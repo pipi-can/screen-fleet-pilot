@@ -9,9 +9,11 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/timerfd.h>
 #include <unistd.h>
 #include <fcntl.h>
 }
+#include "epollmgr.h"
 #include "global_def.h"
 #include "logmgr.h"
 #include "json_bags.h"
@@ -168,8 +170,13 @@ public:
         m_metaMessage.deviceVersion = version;
         m_metaMessage.writeMetaMessageToFile();
     }
+    void setRegistered(bool result) {
+        this->m_registered = result;
+    }
+    void initHeartbeatTimer();
 
     int getSocketFd() const { return m_socketFd; }
+    int getHeartbeatTimerFd() const { return m_heartbeatFd; }
     std::string getName() const { return m_metaMessage.deviceName; }
     std::string getGroup() const { return m_metaMessage.deviceGroup; }
     std::string getVersion() const { return m_metaMessage.deviceVersion; }
@@ -182,6 +189,7 @@ private:
     ~Client();
 
     int     m_socketFd = -1;
+    int     m_heartbeatFd = -1;
     bool    m_registered = false;
     int     m_seqToServer = 0;
     int     m_seqToQt     = 0;

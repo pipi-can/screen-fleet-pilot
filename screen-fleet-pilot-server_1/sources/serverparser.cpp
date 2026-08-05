@@ -9,7 +9,7 @@ static DatabaseMgr* dbMgr = &DatabaseMgr::getInstance();
 
 int RegisterHandler::distributeId = 0;
 
-void ServerParser::parseMessage(ParserContext& parserCtx) {
+void ServerParser::parseMessage(ParserContext parserCtx) {
     JsonBagBasic& basic = parserCtx.basic;
     JsonBagHandler* handler = nullptr;
     if (basic.source == "embedded") {
@@ -21,7 +21,7 @@ void ServerParser::parseMessage(ParserContext& parserCtx) {
     }
 }
 
-void RegisterHandler::action(const ParserContext& parserCtx) {
+void RegisterHandler::action(const ParserContext parserCtx) {
     if (!parserCtx.message) {
         logger->logMsg(ERROR, "register: empty message", true);
         return;
@@ -39,7 +39,7 @@ void RegisterHandler::action(const ParserContext& parserCtx) {
     ctx.clientFd = parserCtx.senderFd;
     if (dbMgr->deviceExists(bag.deviceUid)) {
         dbMgr->updateDevice(bag.deviceUid, bag.name, bag.group);
-        ctx.code     = 0;
+        ctx.code     = 1;
         ctx.deviceId = parserCtx.basic.deviceId;
         ctx.msg      = "repeated";
         reply(ctx);
@@ -60,7 +60,7 @@ void RegisterHandler::action(const ParserContext& parserCtx) {
     }
 }
 
-void RegisterHandler::reply(const RegisterContext& registerCtx) {
+void RegisterHandler::reply(const RegisterContext registerCtx) {
     RegisterAckBag ack;
     ack.code     = registerCtx.code;
     ack.deviceId = registerCtx.deviceId;
