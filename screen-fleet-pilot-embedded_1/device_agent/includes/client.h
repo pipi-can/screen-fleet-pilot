@@ -15,6 +15,7 @@ extern "C" {
 }
 #include "epollmgr.h"
 #include "global_def.h"
+#include <string>
 #include "logmgr.h"
 #include "json_bags.h"
 
@@ -23,7 +24,8 @@ struct ClientMetaMessage {
     std::string deviceGroup;
     std::string deviceVersion;
     std::string deviceUid;
-    ClientMetaMessage(): deviceName(""), deviceGroup(""), deviceVersion(""), deviceUid("") {}
+    std::string cpuTempPath;
+    ClientMetaMessage(): deviceName(""), deviceGroup(""), deviceVersion(""), deviceUid(""), cpuTempPath(""){}
         
     int readFromMacIface(const char* iface, char* buf, int bufsize) {
         char path[64];
@@ -71,6 +73,7 @@ struct ClientMetaMessage {
             this->deviceName    = this->deviceUid;
             this->deviceGroup   = this->deviceUid;
             this->deviceVersion = "1.0.0";
+            this->cpuTempPath   = "/sys/class/thermal/thermal_zone0/temp";
             writeMetaMessageToFile();
         } else {
             // 使用系统调用读取设备信息
@@ -100,6 +103,7 @@ struct ClientMetaMessage {
             struct json_object* groupObj = nullptr;
             struct json_object* versionObj = nullptr;
             struct json_object* uidObj = nullptr;
+            struct json_object* cpuTempPathObj = nullptr;
             // 开始解析所有字段
             if (json_object_object_get_ex(root, "name", &nameObj) && json_object_is_type(nameObj, json_type_string)) {
                 deviceName = json_object_get_string(nameObj);
@@ -113,6 +117,9 @@ struct ClientMetaMessage {
             if (json_object_object_get_ex(root, "device_uid", &uidObj) && json_object_is_type(uidObj, json_type_string)) {
                 deviceUid = json_object_get_string(uidObj);
             }
+            if (json_object_object_get_ex(root, "cpu_temp_path", &cpuTempPathObj) && json_object_is_type(cpuTempPathObj, json_type_string)) {
+                cpuTempPath = json_object_get_string(cpuTempPathObj);
+            }
             // 释放资源
             json_object_put(root);
             close(fp);
@@ -125,6 +132,7 @@ struct ClientMetaMessage {
         json_object_object_add(root, "name", json_object_new_string(this->deviceName.c_str()));
         json_object_object_add(root, "group", json_object_new_string(this->deviceGroup.c_str()));
         json_object_object_add(root, "version", json_object_new_string(this->deviceVersion.c_str()));
+        json_object_object_add(root, "cpu_temp_path", json_object_new_string(this->cpuTempPath.c_str()));
         int fd = open(DEVICE_MESSAGE_PATH, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd < 0) {
             LogMgr::getInstance().logMsg(ERROR, "open device message file failed", true);
@@ -155,6 +163,7 @@ public:
     void connectToServer();
 
     void requestRegisterToServer();
+    void sendHeartbeatBagToServer();
 
     bool sendMessageToServer(const char* message);
 
@@ -170,10 +179,16 @@ public:
         m_metaMessage.deviceVersion = version;
         m_metaMessage.writeMetaMessageToFile();
     }
+    void setCpuTempPath(const std::string& path) {
+        m_metaMessage.cpuTempPath = path;
+        m_metaMessage.writeMetaMessageToFile();
+    }
     void setRegistered(bool result) {
         this->m_registered = result;
     }
-    void initHeartbeatTimer();
+    int initHeartbeatTimer();
+    int startHeartbeatTimer();
+    int stopHeartbeatTimer();
 
     int getSocketFd() const { return m_socketFd; }
     int getHeartbeatTimerFd() const { return m_heartbeatFd; }
@@ -181,15 +196,20 @@ public:
     std::string getGroup() const { return m_metaMessage.deviceGroup; }
     std::string getVersion() const { return m_metaMessage.deviceVersion; }
     std::string getDeviceUid() const { return m_metaMessage.deviceUid; }
-
+    std::string getCpuTempPath() const { return m_metaMessage.cpuTempPath; }
 private:
     Client() {
         m_metaMessage.loadMetaMessage();
     }
     ~Client();
 
+    std::string getCpuTemp();
+    int         getMemUsage();
+    int         getDiskFreeMb();
+
     int     m_socketFd = -1;
     int     m_heartbeatFd = -1;
+    bool    m_heartbeatTimerStartFlag = false;
     bool    m_registered = false;
     int     m_seqToServer = 0;
     int     m_seqToQt     = 0;

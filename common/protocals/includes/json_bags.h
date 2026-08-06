@@ -94,4 +94,20 @@ struct RegisterAckBag: public JsonBag {
     void loadFromJsonString(char* str) override;
 };
 
+struct EmbeddedHeartbeatBag: public JsonBag {
+    std::string cpuTemp;
+    int         memUsage;
+    int         diskFreeMb;
+
+    EmbeddedHeartbeatBag(): JsonBag(), cpuTemp("-1"), memUsage(-1), diskFreeMb(-1) {
+        cmd = "heartbeat";
+    }
+    ~EmbeddedHeartbeatBag() {}
+    bool checkValid() override {
+        return source == "embedded" && cmd == "heartbeat";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
 #endif  

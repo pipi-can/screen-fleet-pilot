@@ -62,7 +62,7 @@ void EpollMgr::wait() {
                     logger->logMsg(ERROR, "handle server message failed", true);
                 }
             } else if (fd == Client::getInstance().getHeartbeatTimerFd()) {
-
+                handleHeartBeatTimer(fd);
             }
         }
     }
@@ -117,6 +117,8 @@ void EpollMgr::handleHeartBeatTimer(int timerFd) {
         perror("\t\tread heartbeat timer");
         return ;
     }
+    // 发送心跳包
+    Client::getInstance().sendHeartbeatBagToServer();
 }
 
 void EpollMgr::parseMessage(int serverFd, char* message) {

@@ -146,3 +146,72 @@ void RegisterAckBag::loadFromJsonString(char* str) {
 
     json_object_put(root);
 }
+
+struct json_object* EmbeddedHeartbeatBag::toJsonObject() {
+    if (!checkValid()) {
+        return nullptr;
+    }
+
+    struct json_object* root = packHead();
+    if (!root) {
+        return nullptr;
+    }
+
+    struct json_object* paramsObj = json_object_new_object();
+    json_object_object_add(paramsObj, "cpu_temp",        json_object_new_string(cpuTemp.c_str()));
+    json_object_object_add(paramsObj, "mem_usage",       json_object_new_int(memUsage));
+    json_object_object_add(paramsObj, "disk_free_mb",    json_object_new_int(diskFreeMb));
+    json_object_object_add(root, "params", paramsObj);
+    return root;
+}
+
+char* EmbeddedHeartbeatBag::toJsonString() {
+    struct json_object* root = toJsonObject();
+    if (!root) {
+        return nullptr;
+    }
+    const char* jsonStr = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    char* result = strdup(jsonStr);
+    json_object_put(root);
+    return result;
+}
+
+void EmbeddedHeartbeatBag::loadFromJsonString(char* str) {
+    if (!str) {
+        return;
+    }
+
+    struct json_object* root = json_tokener_parse(str);
+    if (!root) {
+        return;
+    }
+
+    struct json_object* obj = nullptr;
+
+    readStringField(root, "source", source);
+    readStringField(root, "cmd", cmd);
+
+    if (json_object_object_get_ex(root, "seq", &obj)) {
+        seq = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "timestamp", &obj)) {
+        timestamp = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "device_id", &obj)) {
+        deviceId = json_object_get_int(obj);
+    }
+
+    struct json_object* paramsObj = nullptr;
+    if (json_object_object_get_ex(root, "params", &paramsObj)
+        && json_object_is_type(paramsObj, json_type_object)) {
+        readStringField(paramsObj, "cpu_temp", cpuTemp);
+        if (json_object_object_get_ex(paramsObj, "mem_usage", &obj)) {
+            memUsage = json_object_get_int(obj);
+        }
+        if (json_object_object_get_ex(paramsObj, "disk_free_mb", &obj)) {
+            diskFreeMb = json_object_get_int(obj);
+        }
+    }
+
+    json_object_put(root);
+}

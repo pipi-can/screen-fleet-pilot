@@ -127,8 +127,6 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
         cpu_temp        string    摄氏温度，如 "52"
         mem_usage       number    0-100
         disk_free_mb    number
-        current_content string    可选
-        timestamp       number    设备本地 Unix 秒（定时双模式判钟用）
 
   (B) client → server
       顶层 device_id: number
@@ -416,7 +414,7 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
 
 7.4 seq / timestamp
   - seq：client 侧 m_cmdSeq / embedded msgSeq 递增，便于日志关联
-  - timestamp：client 请求可选；embedded heartbeat.params.timestamp 用于服务端判钟
+  - timestamp：envelope 顶层字段，client / embedded 请求可选
 
 7.5 URL 与路径
   - 推送 paths：client 传服务器相对路径 `/uploads/...`

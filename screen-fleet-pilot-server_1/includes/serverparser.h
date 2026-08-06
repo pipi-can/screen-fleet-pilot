@@ -20,6 +20,11 @@ public:
     static int distributeId;
 };
 
+class EmbeddedHeartbeatHandler: public JsonBagHandler {
+public: 
+    void action(const ParserContext parserCtx) override;
+};
+
 class ServerParser: public JsonParser {
 public:
     ServerParser(const ServerParser& other) = delete;

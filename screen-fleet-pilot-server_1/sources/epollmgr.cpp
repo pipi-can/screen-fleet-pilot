@@ -56,7 +56,7 @@ void EpollMgr::wait() {
     struct epoll_event events[MAX_EVENTS];
 
     while (1) {
-        int readyFds = epoll_wait(m_epollFd, events, MAX_EVENTS, -1);
+        int readyFds = epoll_wait(m_epollFd, events, MAX_EVENTS, 1000);
         if (readyFds == -1) {
             if (errno == EINTR) {
                 continue; // Interrupted by signal, retry

@@ -83,3 +83,20 @@ void RegisterHandler::reply(const RegisterContext registerCtx) {
         "register reply sent, code=" + std::to_string(registerCtx.code)
         + ", device_id=" + std::to_string(registerCtx.deviceId), true);
 }
+
+void EmbeddedHeartbeatHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) {
+        logger->logMsg(ERROR, "embedded heartbeat: empty message", true);
+        return;
+    }
+
+    EmbeddedHeartbeatBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "embedded heartbeat: params invalid or incomplete", true);
+        return;
+    }
+
+
+}

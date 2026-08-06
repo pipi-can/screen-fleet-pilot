@@ -19,6 +19,7 @@ void RegisterAckHandler::action(const ParserContext parserCtx) {
         return;
     }
      
+    static Client* client = &Client::getInstance();
     RegisterAckBag bag;
     bag.loadFromJsonString(parserCtx.message);
 
@@ -28,7 +29,14 @@ void RegisterAckHandler::action(const ParserContext parserCtx) {
     }   
     
     if (bag.code == 0 || bag.code == 1) {
-        Client::getInstance().setRegistered(true);
+        client.setRegistered(true);
+        int ret = client->initHeartbeatTimer();
+        if (ret == -2) {
+            logger->logMsg(ERROR, "init heartbeat timer failed", true);
+        } else {
+            logger->logMsg(DEBUG, "init heartbeat timer success", true);
+            client->startHeartbeatTimer();
+        }
     } else {
         Client::getInstance().setRegistered(false);
     }
