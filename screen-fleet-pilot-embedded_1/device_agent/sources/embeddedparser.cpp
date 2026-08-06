@@ -29,7 +29,7 @@ void RegisterAckHandler::action(const ParserContext parserCtx) {
     }   
     
     if (bag.code == 0 || bag.code == 1) {
-        client.setRegistered(true);
+        client->setRegistered(true);
         int ret = client->initHeartbeatTimer();
         if (ret == -2) {
             logger->logMsg(ERROR, "init heartbeat timer failed", true);

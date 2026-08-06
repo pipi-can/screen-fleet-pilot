@@ -28,6 +28,7 @@ struct ParserContext {
 
 class JsonBagHandler {
 public: 
+    virtual ~JsonBagHandler() {}
     virtual void action(const ParserContext parserCtx) = 0;
 };
 

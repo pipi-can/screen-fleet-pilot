@@ -5,6 +5,7 @@
 #include "client.h"
 class RegisterAckHandler: public JsonBagHandler {
 public: 
+    ~RegisterAckHandler() {}
     void action(const ParserContext parserCtx) override;
 };
 

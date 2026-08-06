@@ -5,6 +5,7 @@
 #include <string>
 #include "jsonparser.h"
 #include "databasemgr.h"
+#include "devicemgr.h"
 
 class RegisterHandler: public JsonBagHandler {
 public:
@@ -14,6 +15,7 @@ public:
         std::string msg;
         int         clientFd;
     };
+    ~RegisterHandler() {}
     void action(const ParserContext parserCtx) override;
     void reply(const RegisterContext registerCtx);
 
@@ -22,6 +24,7 @@ public:
 
 class EmbeddedHeartbeatHandler: public JsonBagHandler {
 public: 
+    ~EmbeddedHeartbeatHandler() {}
     void action(const ParserContext parserCtx) override;
 };
 

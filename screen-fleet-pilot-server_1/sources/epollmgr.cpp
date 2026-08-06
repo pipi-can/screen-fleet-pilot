@@ -81,6 +81,7 @@ void EpollMgr::wait() {
                     handleClientMessage(fd);
                 }
             }
+            DeviceMgr::getInstance().deleteOutlineDevice();
         }
     }
 }

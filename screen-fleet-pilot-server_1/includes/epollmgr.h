@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include "global_def.h"
+#include "devicemgr.h"
 #include "fdbuffer.h"
 #include "serverparser.h"
 

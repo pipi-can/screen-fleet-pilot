@@ -17,6 +17,10 @@ void ServerParser::parseMessage(ParserContext parserCtx) {
             handler = new RegisterHandler();
             handler->action(parserCtx);
             delete handler;
+        } else if (basic.cmd == "heartbeat") {
+            handler = new EmbeddedHeartbeatHandler();
+            handler->action(parserCtx);
+            delete handler;
         }
     }
 }
@@ -98,5 +102,5 @@ void EmbeddedHeartbeatHandler::action(const ParserContext parserCtx) {
         return;
     }
 
-
+    DeviceMgr::getInstance().updateOnlineEmbeddedInfo(parserCtx.senderFd, bag); 
 }
