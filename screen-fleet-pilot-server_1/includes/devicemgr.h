@@ -8,6 +8,7 @@
 #include "json_bags.h"
 #include "global_def.h"
 #include <vector>
+#include "epollmgr.h"
 
 enum ClientType {
     Client, 
@@ -46,8 +47,13 @@ public:
 
     void deleteOutlineDevice();
     void removeClient(int clientFd);
+
+    void loadAllDeviceInfo(std::vector<DeviceEntry>& devices);
+
+    int getEmbeddedFdByUid(const std::string& uid) const;
+    void updateOnlineEmbeddedMeta(int fd, const std::string& name, const std::string& group);
     
-private:    
+private:
     DeviceMgr() = default;
     ~DeviceMgr() = default;
     std::map<int, OnlineClientInfo> m_fd2ClientInfoMap;

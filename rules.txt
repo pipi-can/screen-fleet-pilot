@@ -45,7 +45,6 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
     "cmd": "<指令名>",
     "seq": 1,
     "timestamp": 1718347200,
-    "device_id": 3,
     "params": { }
   }
 
@@ -55,7 +54,6 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
   cmd           string    是      指令名，见第三节
   seq           number    否      序列号，client/embedded 发包递增；server 回包可为 0
   timestamp     number    否      Unix 秒，client 侧常用
-  device_id     number    否      注册后由 server 分配；心跳时 embedded/client 携带
   params        object    否      业务参数，无参数时 `{}` 或省略（实现侧应兼容）
 
 2.2 设备端 IPC（Unix Socket）
@@ -114,22 +112,19 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
 4.2 register_ack（server → client / embedded）
 ------------------------------------------------------------------------------
   params:
-    code        number    0=成功
-    device_id   number    server 分配的连接 ID
-    msg         string    如 "ok" 表示新设备注册成功，"repeated" 表示已经注册过了
+    code        number    0=成功，1=重复注册，-1=失败
+    msg         string    如 "ok" / "repeated" / "error"
 
 ------------------------------------------------------------------------------
 4.3 heartbeat
 ------------------------------------------------------------------------------
   (A) embedded → server
-      顶层 device_id: number
       params:
         cpu_temp        string    摄氏温度，如 "52"
         mem_usage       number    0-100
         disk_free_mb    number
 
   (B) client → server
-      顶层 device_id: number
       params: {} 或省略
 
   服务端 30s 无 heartbeat 判 embedded 离线。
@@ -147,11 +142,11 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
       device_uid    string
       name          string
       group         string
-      id            number    在线为真实 ID，离线 = -1
       version       string
       temperature   string    离线可 ""
       mem_usage     number
       disk_free_mb  number
+      timestamp     number    最后心跳 Unix 时间戳，离线为 0
       online        boolean
 
 ------------------------------------------------------------------------------

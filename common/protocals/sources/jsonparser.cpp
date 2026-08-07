@@ -30,10 +30,6 @@ JsonBagBasic JsonParser::parseBasic(char* jsonStr) {
         basic.timestamp = static_cast<uint32_t>(json_object_get_int64(obj));
     }
 
-    if (json_object_object_get_ex(root, "device_id", &obj)) {
-        basic.deviceId = json_object_get_int(obj);
-    }
-
     json_object_put(root);
     return basic;
 }

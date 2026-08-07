@@ -3,10 +3,24 @@
 
 #include "jsonparser.h"
 #include "client.h"
+
 class RegisterAckHandler: public JsonBagHandler {
-public: 
+public:
     ~RegisterAckHandler() {}
     void action(const ParserContext parserCtx) override;
+};
+
+class UpdateEmbeddedInfoHandler: public JsonBagHandler {
+public:
+    struct UpdateEmbeddedInfoContext {
+        int         sender;
+        std::string group;
+        std::string name;
+        std::string msg;
+    };
+    ~UpdateEmbeddedInfoHandler() {}
+    void action(const ParserContext parserCtx) override;
+    void reply(const UpdateEmbeddedInfoContext& ctx);
 };
 
 class EmbeddedParser: public JsonParser {

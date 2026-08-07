@@ -127,6 +127,8 @@ void EpollMgr::parseMessage(int serverFd, char* message) {
 }
 
 void EpollMgr::closeServerFd(int serverFd) {
+    Client::getInstance().onServerDisconnected();
+
     epoll_ctl(m_epollFd, EPOLL_CTL_DEL, serverFd, nullptr);
     close(serverFd);
     m_fd2BufferMap.erase(serverFd);

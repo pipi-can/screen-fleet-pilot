@@ -161,13 +161,14 @@ public:
     }
 
     void connectToServer();
+    void onServerDisconnected();
 
     void requestRegisterToServer();
     void sendHeartbeatBagToServer();
 
     bool sendMessageToServer(const char* message);
 
-    void setName(const std::string& name) { 
+    void setName(const std::string& name) {
         m_metaMessage.deviceName = name;
         m_metaMessage.writeMetaMessageToFile();
     }

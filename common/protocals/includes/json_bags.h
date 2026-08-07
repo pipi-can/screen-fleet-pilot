@@ -4,6 +4,7 @@
 #include <string>
 #include <cstring>
 #include <cstdint>
+#include <vector>
 #include <sys/types.h>
 
 extern "C" {
@@ -15,7 +16,6 @@ struct JsonBagBasic {
     std::string cmd;
     uint64_t    seq;
     uint32_t    timestamp;
-    int         deviceId;
 };
 
 struct ParserContext {
@@ -37,9 +37,8 @@ struct JsonBag {
     std::string     cmd; 
     uint64_t        seq;
     uint64_t        timestamp;
-    uint32_t        deviceId;
-    JsonBag(): source("embedded"), cmd(""), seq(0), timestamp(0), deviceId(0) {}
-    JsonBag(const std::string& source): source(source), cmd(""), seq(0), timestamp(0), deviceId(0) {};
+    JsonBag(): source("embedded"), cmd(""), seq(0), timestamp(0) {}
+    JsonBag(const std::string& source): source(source), cmd(""), seq(0), timestamp(0) {}
     virtual ~JsonBag() {}
     virtual struct json_object* toJsonObject() = 0;
     virtual bool   checkValid() {
@@ -54,7 +53,6 @@ struct JsonBag {
         json_object_object_add(root, "cmd",    json_object_new_string(cmd.c_str()));
         json_object_object_add(root, "seq",    json_object_new_int64(seq));
         json_object_object_add(root, "timestamp", json_object_new_int64(timestamp));
-        json_object_object_add(root, "device_id", json_object_new_int(deviceId));
         return root;
     }
     
@@ -80,10 +78,9 @@ struct RegisterBag: public JsonBag {
 
 struct RegisterAckBag: public JsonBag {
     int32_t     code;
-    uint32_t    deviceId;
     std::string message;
 
-    RegisterAckBag(): JsonBag("server"), code(0), deviceId(0), message("") {
+    RegisterAckBag(): JsonBag("server"), code(0), message("") {
         cmd = "register_ack";
     }
     ~RegisterAckBag() {}
@@ -106,6 +103,177 @@ struct EmbeddedHeartbeatBag: public JsonBag {
     ~EmbeddedHeartbeatBag() {}
     bool checkValid() override {
         return source == "embedded" && cmd == "heartbeat";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct FetchDevicesBag: public JsonBag {
+    FetchDevicesBag(): JsonBag("client") {
+        cmd = "fetch_devices";
+    }
+    ~FetchDevicesBag() {}
+    bool checkValid() override {
+        return source == "client" && cmd == "fetch_devices";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct DeviceEntry {
+    std::string deviceUid;
+    std::string name;
+    std::string group;
+    std::string version;
+    std::string temperature;
+    int memUsage;
+    int diskFreeMb;
+    uint64_t timestamp;
+    bool online;
+
+    DeviceEntry() : deviceUid(""), name(""), group(""), version(""),
+                    temperature(""), memUsage(-1), diskFreeMb(-1), timestamp(0), online(false) {}
+    struct json_object *toJsonObject() const {
+        struct json_object *root = json_object_new_object();
+        json_object_object_add(root, "device_uid", json_object_new_string(deviceUid.c_str()));
+        json_object_object_add(root, "name", json_object_new_string(name.c_str()));
+        json_object_object_add(root, "group", json_object_new_string(group.c_str()));
+        json_object_object_add(root, "version", json_object_new_string(version.c_str()));
+        json_object_object_add(root, "temperature", json_object_new_string(temperature.c_str()));
+        json_object_object_add(root, "mem_usage", json_object_new_int(memUsage));
+        json_object_object_add(root, "disk_free_mb", json_object_new_int(diskFreeMb));
+        json_object_object_add(root, "timestamp", json_object_new_int64(timestamp));
+        json_object_object_add(root, "online", json_object_new_boolean(online));
+        return root;
+    }
+};
+
+struct FetchDevicesAckBag: public JsonBag {
+    std::vector<DeviceEntry> devices;
+
+    FetchDevicesAckBag(): JsonBag("server") {
+        cmd = "fetch_devices_ack";
+    }
+    ~FetchDevicesAckBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "fetch_devices_ack";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct RequestUpdateEmbeddedBag: public JsonBag {
+    std::string deviceUid;
+    std::string group;
+    std::string name;
+
+    RequestUpdateEmbeddedBag(): JsonBag("client"), deviceUid(""), group(""), name("") {
+        cmd = "request_update_embedded";
+    }
+    ~RequestUpdateEmbeddedBag() {}
+    bool checkValid() override {
+        return source == "client" && cmd == "request_update_embedded"
+            && !deviceUid.empty() && !group.empty() && !name.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct UpdateEmbeddedInfoBag: public JsonBag {
+    std::string deviceUid;
+    int         sender;
+    std::string group;
+    std::string name;
+
+    UpdateEmbeddedInfoBag(): JsonBag("server"), deviceUid(""), sender(-1), group(""), name("") {
+        cmd = "update_embedded_info";
+    }
+    ~UpdateEmbeddedInfoBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "update_embedded_info"
+            && !deviceUid.empty() && sender >= 0 && !group.empty() && !name.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct UpdateInfoAckBag: public JsonBag {
+    std::string msg;
+    int         sender;
+    std::string group;
+    std::string name;
+
+    UpdateInfoAckBag(): JsonBag(), msg(""), sender(-1), group(""), name("") {
+        cmd = "update_info_ack";
+    }
+    ~UpdateInfoAckBag() {}
+    bool checkValid() override {
+        return source == "embedded" && cmd == "update_info_ack"
+            && !msg.empty() && sender >= 0;
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct UpdateEmbeddedInfoResultBag: public JsonBag {
+    std::string status;
+
+    UpdateEmbeddedInfoResultBag(): JsonBag("server"), status("") {
+        cmd = "update_embedded_info_result";
+    }
+    ~UpdateEmbeddedInfoResultBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "update_embedded_info_result" && !status.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct FileListEntry {
+    std::string path;
+    std::string name;
+    int64_t     size;
+
+    FileListEntry(): path(""), name(""), size(0) {}
+    struct json_object* toJsonObject() const {
+        struct json_object* root = json_object_new_object();
+        json_object_object_add(root, "path", json_object_new_string(path.c_str()));
+        json_object_object_add(root, "name", json_object_new_string(name.c_str()));
+        json_object_object_add(root, "size", json_object_new_int64(size));
+        return root;
+    }
+};
+
+struct RequestFileListBag: public JsonBag {
+    RequestFileListBag(): JsonBag("client") {
+        cmd = "request_file_list";
+    }
+    ~RequestFileListBag() {}
+    bool checkValid() override {
+        return source == "client" && cmd == "request_file_list";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct RequestFileListAckBag: public JsonBag {
+    int count;
+    std::vector<FileListEntry> files;
+
+    RequestFileListAckBag(): JsonBag("server"), count(0) {
+        cmd = "request_filelist_ack";
+    }
+    ~RequestFileListAckBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "request_filelist_ack";
     }
     struct json_object* toJsonObject() override;
     char* toJsonString() override;

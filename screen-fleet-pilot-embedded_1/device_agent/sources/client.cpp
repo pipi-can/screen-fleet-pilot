@@ -58,6 +58,18 @@ void Client::connectToServer() {
     logger->logMsg(DEBUG, "connect to server success", true);
 }
 
+void Client::onServerDisconnected() {
+    m_registered = false;
+    stopHeartbeatTimer();
+    // 排空 timerfd 里可能积压的到期事件
+    if (m_heartbeatFd >= 0) {
+        uint64_t exp;
+        while (read(m_heartbeatFd, &exp, sizeof(exp)) > 0) {
+        }
+    }
+    m_socketFd = -1;
+}
+
 int Client::initHeartbeatTimer() {
     if (this->m_heartbeatFd != -1) return -1; // 意味着已经存在不需要初始化了额
     this->m_heartbeatFd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
@@ -132,8 +144,8 @@ void Client::sendHeartbeatBagToServer() {
     }
 
     EmbeddedHeartbeatBag bag;
-    bag.seq              = ++m_seqToServer;
-    bag.cpuTemp          = getCpuTemp();
+    bag.seq         = ++m_seqToServer;
+    bag.cpuTemp     = getCpuTemp();
     bag.memUsage         = getMemUsage();
     bag.diskFreeMb       = getDiskFreeMb();
 

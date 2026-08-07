@@ -35,6 +35,22 @@ void EpollMgr::addFd(int fd, uint32_t events) {
     }
 }
 
+void EpollMgr::removeFd(int fd) {
+    if (epoll_ctl(m_epollFd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
+        logger->logMsg(ERROR, "epoll_ctl remove fd failed", true);
+        perror("\t\tepoll_ctl error");
+    } else {
+        logger->logMsg(DEBUG, "epoll_ctl remove fd success", true);
+    }
+    m_fd2BufferMap.erase(fd);
+    close(fd);
+}
+
+void EpollMgr::recycleFd(int fd) {
+    DeviceMgr::getInstance().removeClient(fd);
+    removeFd(fd);
+}
+
 void EpollMgr::setNonBlock(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
@@ -119,14 +135,12 @@ void EpollMgr::handleClientMessage(int clientFd) {
             } else {
                 logger->logMsg(ERROR, "recv error", true);
                 perror("\t\trecv error");
-                epoll_ctl(m_epollFd, EPOLL_CTL_DEL, clientFd, nullptr);
-                close(clientFd);
+                recycleFd(clientFd);
                 break;
             }
         } else if (bytesRead == 0) {
             logger->logMsg(DEBUG, "client closed connection", true);
-            epoll_ctl(m_epollFd, EPOLL_CTL_DEL, clientFd, nullptr);
-            close(clientFd);
+            recycleFd(clientFd);
             break;
         } else {
             FdBuffer& fdbuf = m_fd2BufferMap[clientFd];

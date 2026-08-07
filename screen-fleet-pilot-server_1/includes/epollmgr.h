@@ -28,6 +28,8 @@ public:
 
     void init();
     void addFd(int fd, uint32_t events);
+    void removeFd(int fd);
+    void recycleFd(int fd);
     static void setNonBlock(int fd);
     void wait();
     void handleNewClient(int socketFd);
