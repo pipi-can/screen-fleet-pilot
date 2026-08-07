@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-08-07T05:50:51",
+  "host": "8.136.113.168",
+  "port": 8000,
+  "mode": "soak",
+  "all_passed": true,
+  "stages": [
+    {
+      "name": "soak",
+      "target_count": 50,
+      "duration_sec": 600,
+      "started_at": "2026-08-07T05:42:46",
+      "ended_at": "2026-08-07T05:50:51",
+      "elapsed_sec": 485.65,
+      "stats": {
+        "connect_attempts": 50,
+        "connect_ok": 50,
+        "register_ok": 50,
+        "register_fail": 0,
+        "heartbeats_sent": 4803,
+        "reconnects": 0,
+        "unexpected_disconnects": 0,
+        "push_resources_received": 422,
+        "push_schedule_received": 0,
+        "download_jobs_started": 422,
+        "download_jobs_finished": 422,
+        "screenshots_sent": 5,
+        "ota_acks_sent": 0,
+        "update_info_acks_sent": 0,
+        "cmd_received": {
+          "client_rx:register_ack": 1,
+          "register_ack": 50,
+          "client_rx:fetch_devices_ack": 18,
+          "push_resources_to_download": 422,
+          "request_screenshot": 5,
+          "client_rx:request_screenshot_ack": 5
+        },
+        "client_fetch_devices": 18,
+        "client_pushes_sent": 9,
+        "client_screenshots_sent": 5,
+        "client_heartbeats_sent": 97
+      },
+      "registered_at_end": 50,
+      "passed": true,
+      "fail_reason": ""
+    }
+  ]
+}

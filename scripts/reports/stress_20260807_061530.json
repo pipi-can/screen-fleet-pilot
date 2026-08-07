@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-08-07T06:15:30",
+  "host": "8.136.113.168",
+  "port": 8000,
+  "mode": "soak",
+  "all_passed": false,
+  "stages": [
+    {
+      "name": "soak",
+      "target_count": 600,
+      "duration_sec": 600,
+      "started_at": "2026-08-07T06:11:19",
+      "ended_at": "2026-08-07T06:15:30",
+      "elapsed_sec": 251.72,
+      "stats": {
+        "connect_attempts": 600,
+        "connect_ok": 600,
+        "register_ok": 600,
+        "register_fail": 0,
+        "heartbeats_sent": 26176,
+        "reconnects": 0,
+        "unexpected_disconnects": 0,
+        "push_resources_received": 0,
+        "push_schedule_received": 0,
+        "download_jobs_started": 0,
+        "download_jobs_finished": 0,
+        "screenshots_sent": 0,
+        "ota_acks_sent": 0,
+        "update_info_acks_sent": 0,
+        "cmd_received": {
+          "register_ack": 600,
+          "client_rx:register_ack": 1,
+          "client_rx:fetch_devices_ack": 1
+        },
+        "client_fetch_devices": 1,
+        "client_pushes_sent": 4,
+        "client_screenshots_sent": 2,
+        "client_heartbeats_sent": 50
+      },
+      "registered_at_end": 600,
+      "passed": false,
+      "fail_reason": "心跳过少 26176，期望至少约 36000"
+    }
+  ]
+}

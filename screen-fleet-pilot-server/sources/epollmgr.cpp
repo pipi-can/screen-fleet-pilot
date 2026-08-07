@@ -434,10 +434,10 @@ void EpollManager::init() {
     logger->logMsg(DEBUG, "epoll init success", true);
 }
 
-void EpollManager::add(int fd, EPOLL_EVENTS event) {
+void EpollManager::add(int fd, uint32_t events) {
     struct epoll_event ev;
     ev.data.fd = fd;
-    ev.events = event;
+    ev.events = events;
     epoll_ctl(m_epollFd, EPOLL_CTL_ADD, fd, &ev);
 }
 
@@ -623,7 +623,7 @@ void EpollManager::checkTimeout() {
         }
     }
     // offline 
-    for (int i = 0; i < dead.size(); i++) {
+    for (size_t i = 0; i < dead.size(); i++) {
         int id = dead[i];
         auto fdIt = m_id2fdMap.find(id);
         if (fdIt == m_id2fdMap.end()) continue;

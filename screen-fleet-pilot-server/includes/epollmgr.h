@@ -11,6 +11,7 @@
 #include <set>
 #include <queue>
 #include <unordered_map>
+#include <cstdint>
 
 extern "C" {
 #include <json-c/json.h>
@@ -140,7 +141,7 @@ public:
 
     void init();
 
-    void add(int fd, EPOLL_EVENTS event);
+    void add(int fd, uint32_t events);
 
     int getEpollFd();
 
