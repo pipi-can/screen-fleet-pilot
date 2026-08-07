@@ -23,6 +23,8 @@ public:
     void init();
 
     int getSocketFd();
+
+    static bool setNonBlock(int fd);
 private: 
     
     SocketMgr();

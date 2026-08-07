@@ -19,6 +19,7 @@ extern "C" {
 #include <dirent.h>
 #include <fcntl.h>
 }
+#include "socketmgr.h"
 
 enum DeviceType {
     EMBEDDED = 1,

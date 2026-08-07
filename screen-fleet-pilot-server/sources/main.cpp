@@ -12,8 +12,9 @@ int main(int argc, char const *argv[])
     epollMgr->init();
     socketMgr->init();
 
-    epollMgr->add(ScheduleMgr::getInstance().timerFd(), EPOLLIN);
-    epollMgr->add(socketMgr->getSocketFd(), EPOLLIN);
+    SocketMgr::setNonBlock(socketMgr->getSocketFd());
+    epollMgr->add(ScheduleMgr::getInstance().timerFd(), EPOLLIN | EPOLLET);
+    epollMgr->add(socketMgr->getSocketFd(), EPOLLIN | EPOLLET);
 
     epollMgr->wait();
     return 0;

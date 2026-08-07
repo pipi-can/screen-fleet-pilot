@@ -1,4 +1,5 @@
 #include "../includes/socketmgr.h"
+#include <fcntl.h>
 
 static LogMgr* logger = &LogMgr::getInstance();
 
@@ -48,4 +49,12 @@ void SocketMgr::init() {
 
 int SocketMgr::getSocketFd() {
     return m_socketFd;
+}
+
+bool SocketMgr::setNonBlock(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0) {
+        return false;
+    }
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }

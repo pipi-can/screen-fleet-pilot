@@ -2,6 +2,7 @@
 #include "../includes/databasemgr.h"
 #include "../includes/epollmgr.h"
 #include "../includes/logmgr.h"
+#include <cerrno>
 #include <cstring>
 
 static LogMgr* logger = &LogMgr::getInstance();
@@ -87,7 +88,18 @@ void ScheduleMgr::removeTasksByDevice(const std::string& deviceUid) {
 
 void ScheduleMgr::onTimerExpired() {
     uint64_t expirations = 0;
-    read(m_timerFd, &expirations, sizeof(expirations));
+    while (true) {
+        ssize_t n = read(m_timerFd, &expirations, sizeof(expirations));
+        if (n < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            return;
+        }
+        if (n == 0) {
+            break;
+        }
+    }
 
     time_t now = time(NULL);
     while (!m_heap.empty() && m_heap.top().triggerAt <= now) {

@@ -472,41 +472,44 @@ void EpollManager::wait() {
             } else if (fd == ScheduleMgr::getInstance().timerFd()) {
                 ScheduleMgr::getInstance().onTimerExpired();
             } else {
-                // ── client send message: bulk read + memchr 按 \n 切帧 ──
+                // ET: 每次 EPOLLIN 必须读到 EAGAIN
                 logger->logMsg(DEBUG, "client send message to read......", true);
 
                 char buf[4096];
-                int n = recv(fd, buf, sizeof(buf), 0);
-
-                if (n < 0) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // 没数据，正常等下次
-                    } else {
+                while (true) {
+                    int n = recv(fd, buf, sizeof(buf), 0);
+                    if (n < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            break;
+                        }
                         logger->logMsg(ERROR, "client link error", true);
                         recycleClient(fd);
+                        break;
+                    } else if (n == 0) {
+                        logger->logMsg(DEBUG, "client close link", true);
+                        recycleClient(fd);
+                        break;
                     }
-                } else if (n == 0) {
-                    logger->logMsg(DEBUG, "client close link", true);
-                    recycleClient(fd);
-                } else {
-                    // 追加到 fd 缓冲区
-                    FdBuffer& fdbuf = m_fd2Buffer[fd];
-                    if (fdbuf.append(buf, n) >= 0) {
-                        // 在内存中按 \n 切帧（零 syscall）
-                        while (true) {
-                            char* nl = (char*)memchr(fdbuf.data, '\n', fdbuf.len);
-                            if (!nl) break;
 
-                            int frameLen = nl - fdbuf.data;
-                            if (frameLen > 0 && fdbuf.data[frameLen - 1] == '\r') {
-                                frameLen--;
-                            }
-                            if (frameLen > 0) {
-                                fdbuf.data[frameLen] = '\0';
-                                parseMessage(fd, fdbuf.data);
-                            }
-                            fdbuf.consume(frameLen + 1);
+                    FdBuffer& fdbuf = m_fd2Buffer[fd];
+                    if (fdbuf.append(buf, n) < 0) {
+                        logger->logMsg(ERROR, "client buffer overflow", true);
+                        recycleClient(fd);
+                        break;
+                    }
+                    while (true) {
+                        char* nl = (char*)memchr(fdbuf.data, '\n', fdbuf.len);
+                        if (!nl) break;
+
+                        int frameLen = nl - fdbuf.data;
+                        if (frameLen > 0 && fdbuf.data[frameLen - 1] == '\r') {
+                            frameLen--;
                         }
+                        if (frameLen > 0) {
+                            fdbuf.data[frameLen] = '\0';
+                            parseMessage(fd, fdbuf.data);
+                        }
+                        fdbuf.consume(frameLen + 1);
                     }
                 }
             }
@@ -633,23 +636,28 @@ void EpollManager::checkTimeout() {
 
 void EpollManager::handleNewClient() {
     struct sockaddr_in clientInfo;
-    memset(&clientInfo, 0, sizeof(clientInfo));
-    socklen_t sockLen = sizeof(clientInfo);
-    int clientFd = accept(SocketMgr::getInstance().getSocketFd(), 
-                            (struct sockaddr*)(&clientInfo), &sockLen);
-    
-    if (clientFd < 0) {
-        logger->logMsg(ERROR, "accept client failed", true);
-        return;
+    while (true) {
+        memset(&clientInfo, 0, sizeof(clientInfo));
+        socklen_t sockLen = sizeof(clientInfo);
+        int clientFd = accept(SocketMgr::getInstance().getSocketFd(), 
+                                (struct sockaddr*)(&clientInfo), &sockLen);   
+        
+        if (clientFd < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;  // 连接队列已空，ET 要求读到这里
+            }
+            logger->logMsg(ERROR, "accept client failed", true);
+            return;
+        }
+        
+        if (!SocketMgr::setNonBlock(clientFd)) {
+            logger->logMsg(ERROR, "set client nonblock failed", true);
+            close(clientFd);
+            continue;
+        }
+        add(clientFd, EPOLLIN | EPOLLET);
+        m_fd2Buffer[clientFd] = FdBuffer();
     }
-
-    add(clientFd, EPOLLIN);
-
-    int flags = fcntl(clientFd, F_GETFL, 0);
-    fcntl(clientFd, F_SETFL, flags | O_NONBLOCK);
-
-    m_fd2Buffer[clientFd] = FdBuffer();  // 显式创建
-
 }
 
 void EpollManager::recycleClient(int fd) {
