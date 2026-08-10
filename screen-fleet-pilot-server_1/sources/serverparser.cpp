@@ -27,7 +27,9 @@ void ServerParser::parseMessage(ParserContext parserCtx) {
             delete handler;
         }
     } else if (basic.source == "client") {
-        if (basic.cmd == "fetch_devices") {
+        if (basic.cmd == "register") {
+            
+        } else if (basic.cmd == "fetch_devices") {
             handler = new FetchDeviceHandler();
             handler->action(parserCtx);
             delete handler;
