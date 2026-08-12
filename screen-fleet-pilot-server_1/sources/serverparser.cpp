@@ -28,7 +28,13 @@ void ServerParser::parseMessage(ParserContext parserCtx) {
         }
     } else if (basic.source == "client") {
         if (basic.cmd == "register") {
-            
+            handler = new RegisterHandler();
+            handler->action(parserCtx);
+            delete handler;
+        } else if (basic.cmd == "heartbeat") {
+            handler = new ClientHeartbeatHandler();
+            handler->action(parserCtx);
+            delete handler;
         } else if (basic.cmd == "fetch_devices") {
             handler = new FetchDeviceHandler();
             handler->action(parserCtx);
@@ -39,6 +45,10 @@ void ServerParser::parseMessage(ParserContext parserCtx) {
             delete handler;
         } else if (basic.cmd == "request_file_list") {
             handler = new RequestFileListHandler();
+            handler->action(parserCtx);
+            delete handler;
+        } else if (basic.cmd == "mask_device") {
+            handler = new MaskDeviceHandler();
             handler->action(parserCtx);
             delete handler;
         }
@@ -56,6 +66,18 @@ static OnlineClientInfo makeOnlineInfo(const RegisterBag& bag) {
     return info;
 }
 
+static void registerOnline(int fd, const RegisterBag& bag) {
+    OnlineClientInfo info = makeOnlineInfo(bag);
+    DeviceMgr& dm = DeviceMgr::getInstance();
+    dm.kickOtherFdByUid(bag.deviceUid, info.type, fd);
+    if (info.type == ClientType::Client) {
+        dm.addOnlineClientInfo(fd, std::move(info));
+        dm.loadClientMaskList(fd);
+    } else {
+        dm.addOnlineEmbeddedInfo(fd, std::move(info));
+    }
+}
+
 void RegisterHandler::action(const ParserContext parserCtx) {
     if (!parserCtx.message) {
         logger->logMsg(ERROR, "register: empty message", true);
@@ -70,6 +92,11 @@ void RegisterHandler::action(const ParserContext parserCtx) {
         return;
     }
 
+    if (bag.source != parserCtx.basic.source) {
+        logger->logMsg(ERROR, "register: source mismatch", true);
+        return;
+    }
+
     RegisterContext ctx;
     ctx.clientFd = parserCtx.senderFd;
 
@@ -77,24 +104,20 @@ void RegisterHandler::action(const ParserContext parserCtx) {
         dbMgr->updateDevice(bag.deviceUid, bag.name, bag.group);
         ctx.code = 1;
         ctx.msg  = "repeated";
-        DeviceMgr::getInstance().addOnlineEmbeddedInfo(ctx.clientFd, makeOnlineInfo(bag));
-        reply(ctx);
-        return;
-    }
-
-    if (!dbMgr->insertDevice(bag.deviceUid, bag.name, bag.group, bag.source)) {
+    } else if (!dbMgr->insertDevice(bag.deviceUid, bag.name, bag.group, bag.source)) {
         ctx.code = -1;
         ctx.msg  = "error";
         reply(ctx);
         logger->logMsg(ERROR, "register: device register failed, uid: " + bag.deviceUid, true);
         return;
+    } else {
+        ctx.code = 0;
+        ctx.msg  = "ok";
+        logger->logMsg(DEBUG, "register: device register success, uid: " + bag.deviceUid, true);
     }
 
-    ctx.code = 0;
-    ctx.msg  = "ok";
-    DeviceMgr::getInstance().addOnlineEmbeddedInfo(ctx.clientFd, makeOnlineInfo(bag));
+    registerOnline(ctx.clientFd, bag);
     reply(ctx);
-    logger->logMsg(DEBUG, "register: device register success, uid: " + bag.deviceUid, true);
 }
 
 void RegisterHandler::reply(const RegisterContext registerCtx) {
@@ -137,6 +160,23 @@ void EmbeddedHeartbeatHandler::action(const ParserContext parserCtx) {
     DeviceMgr::getInstance().updateOnlineEmbeddedInfo(parserCtx.senderFd, bag);
 }
 
+void ClientHeartbeatHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) {
+        logger->logMsg(ERROR, "client heartbeat: empty message", true);
+        return ;
+    }
+
+    ClientHeartbeatBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "client heartbeat: params invalid or incomplete", true);
+        return ;
+    }
+
+    DeviceMgr::getInstance().updateOnlineClientInfo(parserCtx.senderFd, bag);
+}
+
 void FetchDeviceHandler::action(const ParserContext parserCtx) {
     if (!parserCtx.message) {
         logger->logMsg(ERROR, "fetch devices: empty message", true);
@@ -151,6 +191,11 @@ void FetchDeviceHandler::action(const ParserContext parserCtx) {
         return ;
     }
 
+    if (!DeviceMgr::getInstance().isRegisteredClient(parserCtx.senderFd)) {
+        logger->logMsg(WARNING, "fetch devices from unregistered client", true);
+        return ;
+    }
+
     FetchDeviceContext ctx;
     ctx.clientFd = parserCtx.senderFd;
     reply(ctx);
@@ -158,7 +203,7 @@ void FetchDeviceHandler::action(const ParserContext parserCtx) {
 
 void FetchDeviceHandler::reply(const FetchDeviceContext ctx) {
     FetchDevicesAckBag ack;
-    DeviceMgr::getInstance().loadAllDeviceInfo(ack.devices);
+    DeviceMgr::getInstance().loadAllDeviceInfo(ack.devices, ctx.clientFd);
 
     char* jsonStr = ack.toJsonString();
     if (!jsonStr) {
@@ -175,6 +220,57 @@ void FetchDeviceHandler::reply(const FetchDeviceContext ctx) {
 
     logger->logMsg(DEBUG, "fetch devices reply sent, count="
         + std::to_string(ack.devices.size()), true);
+}
+
+void MaskDeviceHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) {
+        logger->logMsg(ERROR, "mask device: empty message", true);
+        return;
+    }
+
+    if (!DeviceMgr::getInstance().isRegisteredClient(parserCtx.senderFd)) {
+        logger->logMsg(ERROR, "mask device from unregistered client", true);
+        return;
+    }
+
+    MaskDeviceBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "mask device: params invalid or incomplete", true);
+        return;
+    }
+
+    DeviceMgr::getInstance().addClientMaskedDevice(parserCtx.senderFd, bag.deviceUid);
+
+    MaskDeviceContext ctx;
+    ctx.clientFd   = parserCtx.senderFd;
+    ctx.code       = 0;
+    ctx.deviceUid  = bag.deviceUid;
+    ctx.message    = "ok";
+    reply(ctx);
+}
+
+void MaskDeviceHandler::reply(const MaskDeviceContext ctx) {
+    MaskDeviceAckBag ack;
+    ack.code      = ctx.code;
+    ack.deviceUid = ctx.deviceUid;
+    ack.message   = ctx.message;
+
+    char* jsonStr = ack.toJsonString();
+    if (!jsonStr) {
+        logger->logMsg(ERROR, "mask device reply: build json failed", true);
+        return;
+    }
+
+    std::string json(jsonStr);
+    free(jsonStr);
+
+    if (!SocketMgr::sendMessage(ctx.clientFd, json)) {
+        return;
+    }
+
+    logger->logMsg(DEBUG, "mask device reply sent, uid=" + ctx.deviceUid, true);
 }
 
 void RequestUpdateEmbeddedHandler::action(const ParserContext parserCtx) {

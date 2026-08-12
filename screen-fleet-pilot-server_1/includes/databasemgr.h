@@ -32,6 +32,9 @@ public:
     std::optional<DeviceRecord> queryDeviceByUid(const std::string& uid) const;
     std::vector<DeviceRecord> queryAllByType(const std::string& type) const;
 
+    bool insertMask(const std::string& clientUid, const std::string& embeddedUid);
+    std::vector<std::string> queryMasksByClient(const std::string& clientUid) const;
+
 private:
     DatabaseMgr();
     ~DatabaseMgr();

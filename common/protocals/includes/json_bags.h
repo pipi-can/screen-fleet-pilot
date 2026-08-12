@@ -1,6 +1,7 @@
 #ifndef JSON_BAGS_H
 #define JSON_BAGS_H
 
+#include <json-c/json_object.h>
 #include <string>
 #include <cstring>
 #include <cstdint>
@@ -103,6 +104,19 @@ struct EmbeddedHeartbeatBag: public JsonBag {
     ~EmbeddedHeartbeatBag() {}
     bool checkValid() override {
         return source == "embedded" && cmd == "heartbeat";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct ClientHeartbeatBag: public JsonBag {
+    ClientHeartbeatBag(): JsonBag("client") {
+        cmd = "heartbeat";
+    }
+    ~ClientHeartbeatBag(){}
+    bool checkValid() override {
+        return source == "client" && cmd == "heartbeat";
     }
     struct json_object* toJsonObject() override;
     char* toJsonString() override;
@@ -274,6 +288,38 @@ struct RequestFileListAckBag: public JsonBag {
     ~RequestFileListAckBag() {}
     bool checkValid() override {
         return source == "server" && cmd == "request_filelist_ack";
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct MaskDeviceBag: public JsonBag {
+    std::string deviceUid;
+
+    MaskDeviceBag(): JsonBag("client"), deviceUid("") {
+        cmd = "mask_device";
+    }
+    ~MaskDeviceBag() {}
+    bool checkValid() override {
+        return source == "client" && cmd == "mask_device" && !deviceUid.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct MaskDeviceAckBag: public JsonBag {
+    int32_t     code;
+    std::string deviceUid;
+    std::string message;
+
+    MaskDeviceAckBag(): JsonBag("server"), code(0), deviceUid(""), message("") {
+        cmd = "mask_device_ack";
+    }
+    ~MaskDeviceAckBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "mask_device_ack";
     }
     struct json_object* toJsonObject() override;
     char* toJsonString() override;

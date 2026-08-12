@@ -22,12 +22,84 @@ void DeviceMgr::updateOnlineEmbeddedInfo(int fd, EmbeddedHeartbeatBag bag) {
     }
 }
 
+void DeviceMgr::updateOnlineClientInfo(int fd, ClientHeartbeatBag bag) {
+    if (bag.checkValid() == false) {
+        logger->logMsg(ERROR, "client heartbeat bag invalid", true);
+        return ;
+    }
+
+    if (isClientExists(fd)) {
+        OnlineClientInfo* clientInfo = getClient(fd);
+        if (clientInfo->type != ClientType::Client) {
+            logger->logMsg(ERROR, "client heartbeat fd is not client type", true);
+            return ;
+        }
+        clientInfo->lastHeartbeatTimestamp = time(nullptr);
+    } else {
+        logger->logMsg(ERROR, "client heartbeat fd not exists", true);
+    }
+}
+
 void DeviceMgr::addOnlineEmbeddedInfo(int fd, OnlineClientInfo info) {
-    this->m_fd2ClientInfoMap.emplace(fd, std::move(info));
+    m_fd2ClientInfoMap.insert_or_assign(fd, std::move(info));
+}
+
+void DeviceMgr::addOnlineClientInfo(int fd, OnlineClientInfo info) {
+    m_fd2ClientInfoMap.insert_or_assign(fd, std::move(info));
+}
+
+void DeviceMgr::kickOtherFdByUid(const std::string& uid, ClientType type, int keepFd) {
+    if (uid.empty()) {
+        return;
+    }
+
+    std::vector<int> kickFdList;
+    for (const auto& pair : m_fd2ClientInfoMap) {
+        if (pair.first != keepFd
+            && pair.second.type == type
+            && pair.second.deviceUid == uid) {
+            kickFdList.emplace_back(pair.first);
+        }
+    }
+
+    for (int fd : kickFdList) {
+        EpollMgr::getInstance().recycleFd(fd);
+    }
+}
+
+void DeviceMgr::loadClientMaskList(int clientFd) {
+    OnlineClientInfo* info = getClient(clientFd);
+    if (!info || info->type != ClientType::Client || info->deviceUid.empty()) {
+        return;
+    }
+
+    info->maskedDeviceUids.clear();
+    std::vector<std::string> maskedUids =
+        DatabaseMgr::getInstance().queryMasksByClient(info->deviceUid);
+    for (const std::string& uid : maskedUids) {
+        info->maskedDeviceUids.insert(uid);
+    }
+}
+
+void DeviceMgr::addClientMaskedDevice(int clientFd, const std::string& embeddedUid) {
+    OnlineClientInfo* info = getClient(clientFd);
+    if (!info || info->type != ClientType::Client || info->deviceUid.empty()) {
+        return;
+    }
+
+    if (!DatabaseMgr::getInstance().insertMask(info->deviceUid, embeddedUid)) {
+        return;
+    }
+    info->maskedDeviceUids.insert(embeddedUid);
 }
 
 bool DeviceMgr::isClientExists(int clientFd) {
     return this->m_fd2ClientInfoMap.count(clientFd) > 0 ? true : false;
+}
+
+bool DeviceMgr::isRegisteredClient(int clientFd) const {
+    auto it = m_fd2ClientInfoMap.find(clientFd);
+    return it != m_fd2ClientInfoMap.end() && it->second.type == ClientType::Client;
 }
 
 OnlineClientInfo* DeviceMgr::getClient(int clientFd) {
@@ -53,8 +125,13 @@ void DeviceMgr::removeClient(int clientFd) {
     this->m_fd2ClientInfoMap.erase(clientFd);
 }
 
-void DeviceMgr::loadAllDeviceInfo(std::vector<DeviceEntry>& devices) {
+void DeviceMgr::loadAllDeviceInfo(std::vector<DeviceEntry>& devices, int clientFd) {
     devices.clear();
+
+    const std::set<std::string>* maskedUids = nullptr;
+    if (isRegisteredClient(clientFd)) {
+        maskedUids = &m_fd2ClientInfoMap[clientFd].maskedDeviceUids;
+    }
 
     std::unordered_map<std::string, const OnlineClientInfo*> uid2Online;
     for (const auto& pair : m_fd2ClientInfoMap) {
@@ -68,6 +145,10 @@ void DeviceMgr::loadAllDeviceInfo(std::vector<DeviceEntry>& devices) {
         DatabaseMgr::getInstance().queryAllByType("embedded");
 
     for (const auto& rec : allDevices) {
+        if (maskedUids && maskedUids->count(rec.uid) > 0) {
+            continue;
+        }
+
         DeviceEntry entry;
         entry.deviceUid = rec.uid;
         entry.name      = rec.name;

@@ -60,6 +60,22 @@ void DatabaseMgr::createTables() {
     }
 
     logger->logMsg(DEBUG, "device table ready", true);
+
+    const char* maskSql =
+        "CREATE TABLE IF NOT EXISTS device_mask ("
+        "client_uid  TEXT NOT NULL,"
+        "device_uid  TEXT NOT NULL,"
+        "PRIMARY KEY (client_uid, device_uid)"
+        ");";
+
+    rc = sqlite3_exec(m_db, maskSql, nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        logger->logMsg(ERROR, errMsg ? errMsg : "create device_mask table failed", true);
+        sqlite3_free(errMsg);
+        return;
+    }
+
+    logger->logMsg(DEBUG, "device_mask table ready", true);
 }
 
 /*
@@ -200,6 +216,59 @@ std::vector<DeviceRecord> DatabaseMgr::queryAllByType(const std::string& type) c
         rec.group = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
         rec.type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
         results.push_back(rec);
+    }
+
+    sqlite3_finalize(stmt);
+    return results;
+}
+
+bool DatabaseMgr::insertMask(const std::string& clientUid, const std::string& embeddedUid) {
+    if (!isOpen() || clientUid.empty() || embeddedUid.empty()) {
+        return false;
+    }
+
+    const char* sql =
+        "INSERT OR IGNORE INTO device_mask (client_uid, device_uid) VALUES (?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        logger->logMsg(ERROR, "insertMask prepare failed", true);
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, clientUid.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, embeddedUid.c_str(), -1, SQLITE_STATIC);
+
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        logger->logMsg(ERROR, "insertMask failed, client=" + clientUid
+            + " device=" + embeddedUid, true);
+        return false;
+    }
+
+    return true;
+}
+
+std::vector<std::string> DatabaseMgr::queryMasksByClient(const std::string& clientUid) const {
+    std::vector<std::string> results;
+    if (!isOpen() || clientUid.empty()) {
+        return results;
+    }
+
+    const char* sql = "SELECT device_uid FROM device_mask WHERE client_uid = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        logger->logMsg(ERROR, "queryMasksByClient prepare failed", true);
+        return results;
+    }
+
+    sqlite3_bind_text(stmt, 1, clientUid.c_str(), -1, SQLITE_STATIC);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        results.push_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
     }
 
     sqlite3_finalize(stmt);

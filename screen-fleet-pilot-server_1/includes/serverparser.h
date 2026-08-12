@@ -25,6 +25,12 @@ public:
     void action(const ParserContext parserCtx) override;
 };
 
+class ClientHeartbeatHandler: public JsonBagHandler {
+public: 
+    ~ClientHeartbeatHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
 class FetchDeviceHandler: public JsonBagHandler {
 public:
     struct FetchDeviceContext {
@@ -72,6 +78,19 @@ public:
     ~RequestFileListHandler() {}
     void action(const ParserContext parserCtx) override;
     void reply(const RequestFileListContext& ctx);
+};
+
+class MaskDeviceHandler: public JsonBagHandler {
+public:
+    struct MaskDeviceContext {
+        int32_t     code;
+        std::string deviceUid;
+        std::string message;
+        int         clientFd;
+    };
+    ~MaskDeviceHandler() {}
+    void action(const ParserContext parserCtx) override;
+    void reply(const MaskDeviceContext ctx);
 };
 
 class ServerParser: public JsonParser {

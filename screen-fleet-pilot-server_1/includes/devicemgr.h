@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <cstdint>
 #include <map>
+#include <set>
 #include "json_bags.h"
 #include "global_def.h"
 #include <vector>
@@ -26,6 +27,8 @@ struct OnlineClientInfo {
     int         lastMemUsage;
     int         lastDiskFreeMb;
 
+    std::set<std::string> maskedDeviceUids;
+
     uint64_t    lastHeartbeatTimestamp;
 };
 
@@ -40,15 +43,21 @@ public:
     }
 
     void updateOnlineEmbeddedInfo(int fd, EmbeddedHeartbeatBag bag);
+    void updateOnlineClientInfo(int fd, ClientHeartbeatBag bag);
     void addOnlineEmbeddedInfo(int fd, OnlineClientInfo info);
+    void addOnlineClientInfo(int fd, OnlineClientInfo info);
+    void kickOtherFdByUid(const std::string& uid, ClientType type, int keepFd);
+    void loadClientMaskList(int clientFd);
+    void addClientMaskedDevice(int clientFd, const std::string& embeddedUid);
 
     bool isClientExists(int clientFd);
+    bool isRegisteredClient(int clientFd) const;
     OnlineClientInfo* getClient(int clientFd);
 
     void deleteOutlineDevice();
     void removeClient(int clientFd);
 
-    void loadAllDeviceInfo(std::vector<DeviceEntry>& devices);
+    void loadAllDeviceInfo(std::vector<DeviceEntry>& devices, int clientFd);
 
     int getEmbeddedFdByUid(const std::string& uid) const;
     void updateOnlineEmbeddedMeta(int fd, const std::string& name, const std::string& group);
