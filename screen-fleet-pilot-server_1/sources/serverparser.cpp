@@ -5,52 +5,43 @@
 #include <cstdlib>
 #include <ctime>
 #include <string>
-
+#include <memory>
 static LogMgr* logger = &LogMgr::getInstance();
 static DatabaseMgr* dbMgr = &DatabaseMgr::getInstance();
 
 void ServerParser::parseMessage(ParserContext parserCtx) {
     JsonBagBasic& basic = parserCtx.basic;
-    JsonBagHandler* handler = nullptr;
+    std::unique_ptr<JsonBagHandler> handler;
     if (basic.source == "embedded") {
         if (basic.cmd == "register") {
-            handler = new RegisterHandler();
+            handler = std::make_unique<RegisterHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "heartbeat") {
-            handler = new EmbeddedHeartbeatHandler();
+            handler = std::make_unique<EmbeddedHeartbeatHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "update_info_ack") {
-            handler = new UpdateInfoAckHandler();
+            handler = std::make_unique<UpdateInfoAckHandler>();
             handler->action(parserCtx);
-            delete handler;
         }
     } else if (basic.source == "client") {
         if (basic.cmd == "register") {
-            handler = new RegisterHandler();
+            handler = std::make_unique<RegisterHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "heartbeat") {
-            handler = new ClientHeartbeatHandler();
+            handler = std::make_unique<ClientHeartbeatHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "fetch_devices") {
-            handler = new FetchDeviceHandler();
+            handler = std::make_unique<FetchDeviceHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "request_update_embedded") {
-            handler = new RequestUpdateEmbeddedHandler();
+            handler = std::make_unique<RequestUpdateEmbeddedHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "request_file_list") {
-            handler = new RequestFileListHandler();
+            handler = std::make_unique<RequestFileListHandler>();
             handler->action(parserCtx);
-            delete handler;
         } else if (basic.cmd == "mask_device") {
-            handler = new MaskDeviceHandler();
+            handler = std::make_unique<MaskDeviceHandler>();
             handler->action(parserCtx);
-            delete handler;
         }
     }
 }
