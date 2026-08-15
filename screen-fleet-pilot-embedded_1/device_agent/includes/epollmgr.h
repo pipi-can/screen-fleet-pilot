@@ -27,6 +27,7 @@ private:
     ~EpollMgr();
 
     bool handleServerMessage(int serverFd);
+    bool handleQtMessage(int qtFd);
     void handleHeartBeatTimer(int timerFd);
     void parseMessage(int serverFd, char* message);
     void closeServerFd(int serverFd);

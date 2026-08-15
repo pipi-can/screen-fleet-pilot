@@ -107,6 +107,42 @@ public:
     void replyToClient(int clientFd, const std::string& path);
 };
 
+class RequestPushContentHandler: public JsonBagHandler {
+public:
+    ~RequestPushContentHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class RequestSchedulePushHandler: public JsonBagHandler {
+public:
+    ~RequestSchedulePushHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class RequestFirmwareListHandler: public JsonBagHandler {
+public:
+    ~RequestFirmwareListHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class RequestOtaUpdateHandler: public JsonBagHandler {
+public:
+    ~RequestOtaUpdateHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class EmbeddedOtaUpdateAckHandler: public JsonBagHandler {
+public:
+    ~EmbeddedOtaUpdateAckHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class RequestCheckFirmwareHandler: public JsonBagHandler {
+public:
+    ~RequestCheckFirmwareHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
 class ServerParser: public JsonParser {
 public:
     ServerParser(const ServerParser& other) = delete;

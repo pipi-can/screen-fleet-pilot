@@ -1,21 +1,20 @@
 #include "../includes/embeddedparser.h"
+#include "../includes/embeddedhandlerregistry.h"
+#include "../includes/contentmgr.h"
+#include "logmgr.h"
+#include <cstdlib>
+#include <memory>
 
 static LogMgr* logger = &LogMgr::getInstance();
 
 void EmbeddedParser::parseMessage(ParserContext parserCtx) {
-    JsonBagBasic basic = parserCtx.basic;
-    JsonBagHandler* handler = nullptr;
-    if (basic.source == "server") {
-        if (basic.cmd == "register_ack") {
-            handler = new RegisterAckHandler();
-            handler->action(parserCtx);
-            delete handler;
-        } else if (basic.cmd == "update_embedded_info") {
-            handler = new UpdateEmbeddedInfoHandler();
-            handler->action(parserCtx);
-            delete handler;
-        }
+    JsonBagBasic& basic = parserCtx.basic;
+    std::unique_ptr<JsonBagHandler> handler = EmbeddedHandlerRegistry::create(basic.source, basic.cmd);
+    if (!handler) {
+        logger->logMsg(ERROR, "unknown message: " + basic.source + "/" + basic.cmd, true);
+        return;
     }
+    handler->action(parserCtx);
 }
 
 void RegisterAckHandler::action(const ParserContext parserCtx) {
@@ -24,10 +23,9 @@ void RegisterAckHandler::action(const ParserContext parserCtx) {
         return;
     }
 
-    static Client* client = &Client::getInstance();
+    Client* client = &Client::getInstance();
     RegisterAckBag bag;
     bag.loadFromJsonString(parserCtx.message);
-
     if (!bag.checkValid()) {
         logger->logMsg(ERROR, "register: params invalid or incomplete", true);
         return;
@@ -35,16 +33,12 @@ void RegisterAckHandler::action(const ParserContext parserCtx) {
 
     if (bag.code == 0 || bag.code == 1) {
         client->setRegistered(true);
-        int ret = client->initHeartbeatTimer();
-        if (ret == -2) {
-            logger->logMsg(ERROR, "init heartbeat timer failed", true);
-        } else {
-            logger->logMsg(DEBUG, "init heartbeat timer success", true);
+        if (client->initHeartbeatTimer() == 0) {
             client->startHeartbeatTimer();
             client->sendHeartbeatBagToServer();
         }
     } else {
-        Client::getInstance().setRegistered(false);
+        client->setRegistered(false);
     }
 }
 
@@ -63,7 +57,6 @@ void UpdateEmbeddedInfoHandler::action(const ParserContext parserCtx) {
 
     Client* client = &Client::getInstance();
     if (bag.deviceUid != client->getDeviceUid()) {
-        logger->logMsg(ERROR, "update embedded info: uid mismatch", true);
         UpdateEmbeddedInfoContext ctx;
         ctx.sender = bag.sender;
         ctx.group  = client->getGroup();
@@ -96,11 +89,52 @@ void UpdateEmbeddedInfoHandler::reply(const UpdateEmbeddedInfoContext& ctx) {
         logger->logMsg(ERROR, "update embedded info: build ack failed", true);
         return;
     }
-
     if (!Client::getInstance().sendMessageToServer(jsonStr)) {
         logger->logMsg(ERROR, "update embedded info: send ack failed", true);
-    } else {
-        logger->logMsg(DEBUG, "update embedded info ack sent", true);
     }
     free(jsonStr);
+}
+
+void PushResourcesHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) return;
+    PushResourcesToDownloadBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "push resources: invalid bag", true);
+        return;
+    }
+    ContentMgr::getInstance().handlePushResources(bag);
+}
+
+void PushScheduleHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) return;
+    PushSchedulePlaylistBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "push schedule: invalid bag", true);
+        return;
+    }
+    ContentMgr::getInstance().handlePushSchedule(bag);
+}
+
+void ScreenshotRequestHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) return;
+    ServerRequestScreenshotBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "screenshot request: invalid bag", true);
+        return;
+    }
+    ContentMgr::getInstance().handleScreenshotRequest(bag.requestClientFd);
+}
+
+void OtaUpdateHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) return;
+    OtaUpdateBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "ota update: invalid bag", true);
+        return;
+    }
+    ContentMgr::getInstance().handleOtaUpdate(bag);
 }

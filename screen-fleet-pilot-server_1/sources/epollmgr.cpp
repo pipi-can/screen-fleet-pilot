@@ -1,4 +1,5 @@
 #include "../includes/epollmgr.h"
+#include "../includes/schedulemgr.h"
 #include "logmgr.h"
 #include "socketmgr.h"
 #include <cstdio>
@@ -89,11 +90,11 @@ void EpollMgr::wait() {
                 if (fd == -1) {
                     logger->logMsg(ERROR, "epoll_wait returned invalid fd", true);
                     continue;
-                } else if (fd == SocketMgr::getInstance().getSocketFd()) {
-                    // new client come 
+                } else                 if (fd == SocketMgr::getInstance().getSocketFd()) {
                     handleNewClient(fd);
+                } else if (fd == ScheduleMgr::getInstance().timerFd()) {
+                    ScheduleMgr::getInstance().onTimerExpired();
                 } else {
-                    // handle message sent by client
                     handleClientMessage(fd);
                 }
             }

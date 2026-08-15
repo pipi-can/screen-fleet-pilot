@@ -23,6 +23,30 @@ public:
     void reply(const UpdateEmbeddedInfoContext& ctx);
 };
 
+class PushResourcesHandler: public JsonBagHandler {
+public:
+    ~PushResourcesHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class PushScheduleHandler: public JsonBagHandler {
+public:
+    ~PushScheduleHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class ScreenshotRequestHandler: public JsonBagHandler {
+public:
+    ~ScreenshotRequestHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
+class OtaUpdateHandler: public JsonBagHandler {
+public:
+    ~OtaUpdateHandler() {}
+    void action(const ParserContext parserCtx) override;
+};
+
 class EmbeddedParser: public JsonParser {
 public:
     EmbeddedParser(const EmbeddedParser& other) = delete;

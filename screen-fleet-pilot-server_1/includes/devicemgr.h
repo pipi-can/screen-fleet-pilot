@@ -30,6 +30,7 @@ struct OnlineClientInfo {
     std::set<std::string> maskedDeviceUids;
 
     uint64_t    lastHeartbeatTimestamp;
+    time_t      deviceTimestamp;
 };
 
 class DeviceMgr {
@@ -60,6 +61,7 @@ public:
     void loadAllDeviceInfo(std::vector<DeviceEntry>& devices, int clientFd);
 
     int getEmbeddedFdByUid(const std::string& uid) const;
+    int getClientFdByUid(const std::string& uid) const;
     void updateOnlineEmbeddedMeta(int fd, const std::string& name, const std::string& group);
     
 private:

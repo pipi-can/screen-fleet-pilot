@@ -17,6 +17,11 @@ void DeviceMgr::updateOnlineEmbeddedInfo(int fd, EmbeddedHeartbeatBag bag) {
         clientInfo->lastMemUsage = bag.memUsage;
         clientInfo->lastDiskFreeMb = bag.diskFreeMb;
         clientInfo->lastHeartbeatTimestamp = time(nullptr);
+        if (bag.deviceTimestamp > 0) {
+            clientInfo->deviceTimestamp = static_cast<time_t>(bag.deviceTimestamp);
+        } else if (bag.timestamp > 0) {
+            clientInfo->deviceTimestamp = static_cast<time_t>(bag.timestamp);
+        }
     } else {
         logger->logMsg(ERROR, "embedded heartbeat fd not exists", true);
     }
@@ -172,6 +177,15 @@ void DeviceMgr::loadAllDeviceInfo(std::vector<DeviceEntry>& devices, int clientF
 int DeviceMgr::getEmbeddedFdByUid(const std::string& uid) const {
     for (const auto& pair : m_fd2ClientInfoMap) {
         if (pair.second.type == ClientType::Embedded && pair.second.deviceUid == uid) {
+            return pair.first;
+        }
+    }
+    return -1;
+}
+
+int DeviceMgr::getClientFdByUid(const std::string& uid) const {
+    for (const auto& pair : m_fd2ClientInfoMap) {
+        if (pair.second.type == ClientType::Client && pair.second.deviceUid == uid) {
             return pair.first;
         }
     }

@@ -1,6 +1,7 @@
 #include "../includes/epollmgr.h"
 #include "../includes/client.h"
 #include "../includes/embeddedparser.h"
+#include "../includes/contentmgr.h"
 #include "logmgr.h"
 #include "jsonparser.h"
 #include <cerrno>
@@ -61,6 +62,10 @@ void EpollMgr::wait() {
                 if (!handleServerMessage(fd)) {
                     logger->logMsg(ERROR, "handle server message failed", true);
                 }
+            } else if (fd == ContentMgr::getInstance().qtFd()) {
+                if (!handleQtMessage(fd)) {
+                    logger->logMsg(ERROR, "handle qt message failed", true);
+                }
             } else if (fd == Client::getInstance().getHeartbeatTimerFd()) {
                 handleHeartBeatTimer(fd);
             }
@@ -114,11 +119,38 @@ void EpollMgr::handleHeartBeatTimer(int timerFd) {
     ssize_t readBytes = read(timerFd, &exp, sizeof(exp));
     if (readBytes < 0) {
         logger->logMsg(ERROR, "read heartbeat timer failed", true);
-        perror("\t\tread heartbeat timer");
-        return ;
+        return;
     }
-    // 发送心跳包
     Client::getInstance().sendHeartbeatBagToServer();
+}
+
+bool EpollMgr::handleQtMessage(int qtFd) {
+    char buffer[4096];
+    ssize_t bytesRead = recv(qtFd, buffer, sizeof(buffer) - 1, 0);
+    if (bytesRead <= 0) {
+        ContentMgr::getInstance().onQtDisconnected();
+        epoll_ctl(m_epollFd, EPOLL_CTL_DEL, qtFd, nullptr);
+        m_fd2BufferMap.erase(qtFd);
+        return false;
+    }
+
+    FdBuffer& fdbuf = m_fd2BufferMap[qtFd];
+    if (fdbuf.append(buffer, static_cast<int>(bytesRead)) < 0) {
+        return false;
+    }
+
+    while (true) {
+        char* nl = static_cast<char*>(memchr(fdbuf.data, '\n', fdbuf.len));
+        if (!nl) break;
+        int frameLen = nl - fdbuf.data;
+        if (frameLen > 0 && fdbuf.data[frameLen - 1] == '\r') frameLen--;
+        if (frameLen > 0) {
+            fdbuf.data[frameLen] = '\0';
+            ContentMgr::getInstance().handleQtMessage(fdbuf.data);
+        }
+        fdbuf.consume(frameLen + 1);
+    }
+    return true;
 }
 
 void EpollMgr::parseMessage(int serverFd, char* message) {

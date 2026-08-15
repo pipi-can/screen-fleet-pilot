@@ -151,6 +151,9 @@ struct json_object* EmbeddedHeartbeatBag::toJsonObject() {
     json_object_object_add(paramsObj, "cpu_temp",        json_object_new_string(cpuTemp.c_str()));
     json_object_object_add(paramsObj, "mem_usage",       json_object_new_int(memUsage));
     json_object_object_add(paramsObj, "disk_free_mb",    json_object_new_int(diskFreeMb));
+    if (deviceTimestamp > 0) {
+        json_object_object_add(paramsObj, "timestamp", json_object_new_int64(deviceTimestamp));
+    }
     json_object_object_add(root, "params", paramsObj);
     return root;
 }
@@ -197,6 +200,9 @@ void EmbeddedHeartbeatBag::loadFromJsonString(char* str) {
         }
         if (json_object_object_get_ex(paramsObj, "disk_free_mb", &obj)) {
             diskFreeMb = json_object_get_int(obj);
+        }
+        if (json_object_object_get_ex(paramsObj, "timestamp", &obj)) {
+            deviceTimestamp = json_object_get_int64(obj);
         }
     }
 

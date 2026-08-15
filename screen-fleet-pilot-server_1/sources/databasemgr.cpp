@@ -1,4 +1,5 @@
 #include "../includes/databasemgr.h"
+#include "../includes/schedulemgr.h"
 #include "logmgr.h"
 #include <sqlite3.h>
 
@@ -76,6 +77,26 @@ void DatabaseMgr::createTables() {
     }
 
     logger->logMsg(DEBUG, "device_mask table ready", true);
+
+    const char* scheduleSql =
+        "CREATE TABLE IF NOT EXISTS schedule_task ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "device_uid TEXT NOT NULL,"
+        "schedule_date TEXT NOT NULL,"
+        "schedule_time TEXT NOT NULL,"
+        "duration_sec INTEGER NOT NULL,"
+        "trigger_at INTEGER NOT NULL,"
+        "paths TEXT NOT NULL,"
+        "enabled INTEGER NOT NULL DEFAULT 1"
+        ");";
+
+    rc = sqlite3_exec(m_db, scheduleSql, nullptr, nullptr, &errMsg);
+    if (rc != SQLITE_OK) {
+        logger->logMsg(ERROR, errMsg ? errMsg : "create schedule_task table failed", true);
+        sqlite3_free(errMsg);
+        return;
+    }
+    logger->logMsg(DEBUG, "schedule_task table ready", true);
 }
 
 /*
@@ -271,6 +292,68 @@ std::vector<std::string> DatabaseMgr::queryMasksByClient(const std::string& clie
         results.push_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0)));
     }
 
+    sqlite3_finalize(stmt);
+    return results;
+}
+
+int DatabaseMgr::insertScheduleTask(const ScheduleTask& task) {
+    if (!isOpen()) return -1;
+    const char* sql =
+        "INSERT INTO schedule_task "
+        "(device_uid, schedule_date, schedule_time, duration_sec, trigger_at, paths, enabled) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return -1;
+
+    std::string pathsJson = ScheduleMgr::encodePaths(task.paths);
+    sqlite3_bind_text(stmt, 1, task.deviceUid.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task.scheduleDate.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, task.scheduleTime.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 4, task.durationSec);
+    sqlite3_bind_int64(stmt, 5, static_cast<sqlite3_int64>(task.triggerAt));
+    sqlite3_bind_text(stmt, 6, pathsJson.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 7, task.enabled ? 1 : 0);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) return -1;
+    return static_cast<int>(sqlite3_last_insert_rowid(m_db));
+}
+
+void DatabaseMgr::disableScheduleTask(int id) {
+    if (!isOpen()) return;
+    const char* sql = "UPDATE schedule_task SET enabled = 0 WHERE id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return;
+    sqlite3_bind_int(stmt, 1, id);
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+}
+
+std::vector<ScheduleTask> DatabaseMgr::queryPendingScheduleTasks(time_t now) const {
+    std::vector<ScheduleTask> results;
+    if (!isOpen()) return results;
+
+    const char* sql =
+        "SELECT id, device_uid, schedule_date, schedule_time, duration_sec, trigger_at, paths, enabled "
+        "FROM schedule_task WHERE enabled = 1 AND trigger_at >= ? ORDER BY trigger_at ASC;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) return results;
+    sqlite3_bind_int64(stmt, 1, static_cast<sqlite3_int64>(now));
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        ScheduleTask task;
+        task.id = sqlite3_column_int(stmt, 0);
+        task.deviceUid = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        task.scheduleDate = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        task.scheduleTime = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        task.durationSec = sqlite3_column_int(stmt, 4);
+        task.triggerAt = static_cast<time_t>(sqlite3_column_int64(stmt, 5));
+        const char* pathsJson = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+        if (pathsJson && pathsJson[0]) task.paths = ScheduleMgr::parsePaths(pathsJson);
+        task.enabled = sqlite3_column_int(stmt, 7) != 0;
+        results.push_back(task);
+    }
     sqlite3_finalize(stmt);
     return results;
 }

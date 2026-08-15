@@ -97,8 +97,9 @@ struct EmbeddedHeartbeatBag: public JsonBag {
     std::string cpuTemp;
     int         memUsage;
     int         diskFreeMb;
+    int64_t     deviceTimestamp;
 
-    EmbeddedHeartbeatBag(): JsonBag(), cpuTemp("-1"), memUsage(-1), diskFreeMb(-1) {
+    EmbeddedHeartbeatBag(): JsonBag(), cpuTemp("-1"), memUsage(-1), diskFreeMb(-1), deviceTimestamp(0) {
         cmd = "heartbeat";
     }
     ~EmbeddedHeartbeatBag() {}

@@ -4,8 +4,10 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <ctime>
 
 struct sqlite3;
+struct ScheduleTask;
 
 struct DeviceRecord {
     std::string uid;
@@ -34,6 +36,10 @@ public:
 
     bool insertMask(const std::string& clientUid, const std::string& embeddedUid);
     std::vector<std::string> queryMasksByClient(const std::string& clientUid) const;
+
+    int insertScheduleTask(const ScheduleTask& task);
+    void disableScheduleTask(int id);
+    std::vector<ScheduleTask> queryPendingScheduleTasks(time_t now) const;
 
 private:
     DatabaseMgr();

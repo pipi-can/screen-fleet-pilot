@@ -7,6 +7,7 @@
 #include <sys/statvfs.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <ctime>
 
 static LogMgr* logger = &LogMgr::getInstance();
 
@@ -146,8 +147,9 @@ void Client::sendHeartbeatBagToServer() {
     EmbeddedHeartbeatBag bag;
     bag.seq         = ++m_seqToServer;
     bag.cpuTemp     = getCpuTemp();
-    bag.memUsage         = getMemUsage();
-    bag.diskFreeMb       = getDiskFreeMb();
+    bag.memUsage    = getMemUsage();
+    bag.diskFreeMb  = getDiskFreeMb();
+    bag.deviceTimestamp = time(nullptr);
 
     char* jsonStr = bag.toJsonString();
     if (!jsonStr) {
