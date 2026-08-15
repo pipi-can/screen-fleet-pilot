@@ -454,9 +454,9 @@ static int notify_schedule_ready(void) {
     return ret;
 }
 
-static void client_send_screenshot_data(Client* c, int clientId, const char* path) {
-    if (!c || clientId < 0) {
-        fprintf(stderr, "[client] screenshot_data: invalid client id\n");
+static void client_send_screenshot_data(Client* c, int requestClientFd, const char* path) {
+    if (!c || requestClientFd < 0) {
+        fprintf(stderr, "[client] screenshot_data: invalid request_client_fd\n");
         return;
     }
 
@@ -466,7 +466,7 @@ static void client_send_screenshot_data(Client* c, int clientId, const char* pat
     json_object_object_add(root, "seq", json_object_new_int(++c->msgSeq));
 
     struct json_object* p = json_object_new_object();
-    json_object_object_add(p, "device_id", json_object_new_int(clientId));
+    json_object_object_add(p, "request_client_fd", json_object_new_int(requestClientFd));
     if (path && path[0]) {
         json_object_object_add(p, "path", json_object_new_string(path));
     }
@@ -474,8 +474,8 @@ static void client_send_screenshot_data(Client* c, int clientId, const char* pat
 
     client_send_json(c, root);
     json_object_put(root);
-    printf("[client] screenshot_data sent, client_id=%d path=%s\n",
-           clientId, path ? path : "");
+    printf("[client] screenshot_data sent, request_client_fd=%d path=%s\n",
+           requestClientFd, path ? path : "");
 }
 
 static int upload_screenshot_to_server(Client* c, const char* localPath,
@@ -1241,20 +1241,24 @@ void client_handle_ota_update(Client* c, struct json_object* params) {
 }
 
 void client_handle_request_screenshot(Client* c, struct json_object* params) {
-    int clientId = -1;
+    int requestClientFd = -1;
     if (params) {
-        struct json_object* idObj = NULL;
-        json_object_object_get_ex(params, "device_id", &idObj);
-        if (idObj) {
-            clientId = json_object_get_int(idObj);
+        struct json_object* fdObj = NULL;
+        if (json_object_object_get_ex(params, "request_client_fd", &fdObj)) {
+            requestClientFd = json_object_get_int(fdObj);
+        } else {
+            struct json_object* idObj = NULL;
+            if (json_object_object_get_ex(params, "device_id", &idObj)) {
+                requestClientFd = json_object_get_int(idObj);
+            }
         }
     }
 
     struct json_object* root = json_object_new_object();
     json_object_object_add(root, "cmd", json_object_new_string("screenshot_request"));
-    json_object_object_add(root, "device_id", json_object_new_int(clientId));
+    json_object_object_add(root, "device_id", json_object_new_int(requestClientFd));
 
-    printf("[client] request_screenshot from server, client_id=%d\n", clientId);
+    printf("[client] request_screenshot from server, request_client_fd=%d\n", requestClientFd);
     if (notify_qt(root) < 0) {
         fprintf(stderr, "[client] notify qt screenshot failed\n");
     }

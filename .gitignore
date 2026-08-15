@@ -7,3 +7,4 @@ screen-fleet-pilot-embedded_1/device_agent/bin/
 screen-fleet-pilot-server/build*/
 screen-fleet-pilot-server_1/build*/
 screen-fleet-pilot-server_1/bin/
+.vscode/

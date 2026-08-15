@@ -559,6 +559,227 @@ void UpdateEmbeddedInfoResultBag::loadFromJsonString(char* str) {
     json_object_put(root);
 }
 
+struct json_object* ClientRequestScreenshotBag::toJsonObject() {
+    if (!checkValid()) {
+        return nullptr;
+    }
+
+    struct json_object* root = packHead();
+    struct json_object* paramsObj = json_object_new_object();
+    json_object_object_add(paramsObj, "device_uid",
+                           json_object_new_string(wantedDeviceUid.c_str()));
+    json_object_object_add(root, "params", paramsObj);
+    return root;
+}
+
+char* ClientRequestScreenshotBag::toJsonString() {
+    struct json_object* root = toJsonObject();
+    if (!root) {
+        return nullptr;
+    }
+    const char* jsonStr = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    char* result = strdup(jsonStr);
+    json_object_put(root);
+    return result;
+}
+
+void ClientRequestScreenshotBag::loadFromJsonString(char* str) {
+    if (!str) {
+        return;
+    }
+
+    struct json_object* root = json_tokener_parse(str);
+    if (!root) {
+        return;
+    }
+
+    struct json_object* obj = nullptr;
+    readStringField(root, "source", source);
+    readStringField(root, "cmd", cmd);
+
+    if (json_object_object_get_ex(root, "seq", &obj)) {
+        seq = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "timestamp", &obj)) {
+        timestamp = json_object_get_int64(obj);
+    }
+
+    struct json_object* paramsObj = nullptr;
+    if (json_object_object_get_ex(root, "params", &paramsObj)
+        && json_object_is_type(paramsObj, json_type_object)) {
+        readStringField(paramsObj, "device_uid", wantedDeviceUid);
+    }
+
+    json_object_put(root);
+}
+
+struct json_object* ServerRequestScreenshotBag::toJsonObject() {
+    if (!checkValid()) {
+        return nullptr;
+    }
+
+    struct json_object* root = packHead();
+    struct json_object* paramsObj = json_object_new_object();
+    json_object_object_add(paramsObj, "request_client_fd",
+                           json_object_new_int(requestClientFd));
+    json_object_object_add(root, "params", paramsObj);
+    return root;
+}
+
+char* ServerRequestScreenshotBag::toJsonString() {
+    struct json_object* root = toJsonObject();
+    if (!root) {
+        return nullptr;
+    }
+    const char* jsonStr = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    char* result = strdup(jsonStr);
+    json_object_put(root);
+    return result;
+}
+
+void ServerRequestScreenshotBag::loadFromJsonString(char* str) {
+    if (!str) {
+        return;
+    }
+
+    struct json_object* root = json_tokener_parse(str);
+    if (!root) {
+        return;
+    }
+
+    struct json_object* obj = nullptr;
+    readStringField(root, "source", source);
+    readStringField(root, "cmd", cmd);
+
+    if (json_object_object_get_ex(root, "seq", &obj)) {
+        seq = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "timestamp", &obj)) {
+        timestamp = json_object_get_int64(obj);
+    }
+
+    struct json_object* paramsObj = nullptr;
+    if (json_object_object_get_ex(root, "params", &paramsObj)
+        && json_object_is_type(paramsObj, json_type_object)) {
+        if (json_object_object_get_ex(paramsObj, "request_client_fd", &obj)) {
+            requestClientFd = json_object_get_int(obj);
+        }
+    }
+
+    json_object_put(root);
+}
+
+struct json_object* ScreenshotDataBag::toJsonObject() {
+    if (!checkValid()) {
+        return nullptr;
+    }
+
+    struct json_object* root = packHead();
+    struct json_object* paramsObj = json_object_new_object();
+    json_object_object_add(paramsObj, "request_client_fd",
+                           json_object_new_int(requestClientFd));
+    json_object_object_add(paramsObj, "path", json_object_new_string(path.c_str()));
+    json_object_object_add(root, "params", paramsObj);
+    return root;
+}
+
+char* ScreenshotDataBag::toJsonString() {
+    struct json_object* root = toJsonObject();
+    if (!root) {
+        return nullptr;
+    }
+    const char* jsonStr = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    char* result = strdup(jsonStr);
+    json_object_put(root);
+    return result;
+}
+
+void ScreenshotDataBag::loadFromJsonString(char* str) {
+    if (!str) {
+        return;
+    }
+
+    struct json_object* root = json_tokener_parse(str);
+    if (!root) {
+        return;
+    }
+
+    struct json_object* obj = nullptr;
+    readStringField(root, "source", source);
+    readStringField(root, "cmd", cmd);
+
+    if (json_object_object_get_ex(root, "seq", &obj)) {
+        seq = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "timestamp", &obj)) {
+        timestamp = json_object_get_int64(obj);
+    }
+
+    struct json_object* paramsObj = nullptr;
+    if (json_object_object_get_ex(root, "params", &paramsObj)
+        && json_object_is_type(paramsObj, json_type_object)) {
+        if (json_object_object_get_ex(paramsObj, "request_client_fd", &obj)) {
+            requestClientFd = json_object_get_int(obj);
+        }
+        readStringField(paramsObj, "path", path);
+    }
+
+    json_object_put(root);
+}
+
+struct json_object* RequestScreenshotAckBag::toJsonObject() {
+    if (!checkValid()) {
+        return nullptr;
+    }
+
+    struct json_object* root = packHead();
+    struct json_object* paramsObj = json_object_new_object();
+    json_object_object_add(paramsObj, "path", json_object_new_string(path.c_str()));
+    json_object_object_add(root, "params", paramsObj);
+    return root;
+}
+
+char* RequestScreenshotAckBag::toJsonString() {
+    struct json_object* root = toJsonObject();
+    if (!root) {
+        return nullptr;
+    }
+    const char* jsonStr = json_object_to_json_string_ext(root, JSON_C_TO_STRING_PLAIN);
+    char* result = strdup(jsonStr);
+    json_object_put(root);
+    return result;
+}
+
+void RequestScreenshotAckBag::loadFromJsonString(char* str) {
+    if (!str) {
+        return;
+    }
+
+    struct json_object* root = json_tokener_parse(str);
+    if (!root) {
+        return;
+    }
+
+    struct json_object* obj = nullptr;
+    readStringField(root, "source", source);
+    readStringField(root, "cmd", cmd);
+
+    if (json_object_object_get_ex(root, "seq", &obj)) {
+        seq = json_object_get_int64(obj);
+    }
+    if (json_object_object_get_ex(root, "timestamp", &obj)) {
+        timestamp = json_object_get_int64(obj);
+    }
+
+    struct json_object* paramsObj = nullptr;
+    if (json_object_object_get_ex(root, "params", &paramsObj)
+        && json_object_is_type(paramsObj, json_type_object)) {
+        readStringField(paramsObj, "path", path);
+    }
+
+    json_object_put(root);
+}
+
 struct json_object* RequestFileListBag::toJsonObject() {
     if (!checkValid()) {
         return nullptr;

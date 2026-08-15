@@ -250,6 +250,68 @@ struct UpdateEmbeddedInfoResultBag: public JsonBag {
     void loadFromJsonString(char* str) override;
 };
 
+struct ClientRequestScreenshotBag: public JsonBag {
+    std::string wantedDeviceUid;
+
+    ClientRequestScreenshotBag(): JsonBag("client"), wantedDeviceUid("") {
+        cmd = "request_screenshot";
+    }
+    ~ClientRequestScreenshotBag() {}
+    bool checkValid() override {
+        return source == "client" && cmd == "request_screenshot" && !wantedDeviceUid.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct ServerRequestScreenshotBag: public JsonBag {
+    int requestClientFd;
+
+    ServerRequestScreenshotBag(): JsonBag("server"), requestClientFd(-1) {
+        cmd = "request_screenshot";
+    }
+    ~ServerRequestScreenshotBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "request_screenshot" && requestClientFd >= 0;
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct ScreenshotDataBag: public JsonBag {
+    int         requestClientFd;
+    std::string path;
+
+    ScreenshotDataBag(): JsonBag("embedded"), requestClientFd(-1), path("") {
+        cmd = "screenshot_data";
+    }
+    ~ScreenshotDataBag() {}
+    bool checkValid() override {
+        return source == "embedded" && cmd == "screenshot_data"
+            && requestClientFd >= 0 && !path.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
+struct RequestScreenshotAckBag: public JsonBag {
+    std::string path;
+
+    RequestScreenshotAckBag(): JsonBag("server"), path("") {
+        cmd = "request_screenshot_ack";
+    }
+    ~RequestScreenshotAckBag() {}
+    bool checkValid() override {
+        return source == "server" && cmd == "request_screenshot_ack" && !path.empty();
+    }
+    struct json_object* toJsonObject() override;
+    char* toJsonString() override;
+    void loadFromJsonString(char* str) override;
+};
+
 struct FileListEntry {
     std::string path;
     std::string name;

@@ -1,49 +1,22 @@
 #include "../includes/serverparser.h"
+#include "../includes/handlerregistry.h"
 #include "logmgr.h"
 #include "socketmgr.h"
 #include "filelistmgr.h"
 #include <cstdlib>
 #include <ctime>
 #include <string>
-#include <memory>
 static LogMgr* logger = &LogMgr::getInstance();
 static DatabaseMgr* dbMgr = &DatabaseMgr::getInstance();
 
 void ServerParser::parseMessage(ParserContext parserCtx) {
     JsonBagBasic& basic = parserCtx.basic;
-    std::unique_ptr<JsonBagHandler> handler;
-    if (basic.source == "embedded") {
-        if (basic.cmd == "register") {
-            handler = std::make_unique<RegisterHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "heartbeat") {
-            handler = std::make_unique<EmbeddedHeartbeatHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "update_info_ack") {
-            handler = std::make_unique<UpdateInfoAckHandler>();
-            handler->action(parserCtx);
-        }
-    } else if (basic.source == "client") {
-        if (basic.cmd == "register") {
-            handler = std::make_unique<RegisterHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "heartbeat") {
-            handler = std::make_unique<ClientHeartbeatHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "fetch_devices") {
-            handler = std::make_unique<FetchDeviceHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "request_update_embedded") {
-            handler = std::make_unique<RequestUpdateEmbeddedHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "request_file_list") {
-            handler = std::make_unique<RequestFileListHandler>();
-            handler->action(parserCtx);
-        } else if (basic.cmd == "mask_device") {
-            handler = std::make_unique<MaskDeviceHandler>();
-            handler->action(parserCtx);
-        }
+    std::unique_ptr<JsonBagHandler> handler = HandlerRegistry::create(basic.source, basic.cmd);
+    if (!handler) {
+        logger->logMsg(ERROR, "unknown message: " + basic.source + "/" + basic.cmd, true);
+        return;
     }
+    handler->action(parserCtx);
 }
 
 static OnlineClientInfo makeOnlineInfo(const RegisterBag& bag) {
@@ -262,6 +235,100 @@ void MaskDeviceHandler::reply(const MaskDeviceContext ctx) {
     }
 
     logger->logMsg(DEBUG, "mask device reply sent, uid=" + ctx.deviceUid, true);
+}
+
+void ClientRequestScreenshotHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) {
+        logger->logMsg(ERROR, "request screenshot: empty message", true);
+        return;
+    }
+
+    if (!DeviceMgr::getInstance().isRegisteredClient(parserCtx.senderFd)) {
+        logger->logMsg(ERROR, "request screenshot from unregistered client", true);
+        return;
+    }
+
+    ClientRequestScreenshotBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "request screenshot: params invalid", true);
+        return;
+    }
+
+    int embeddedFd = DeviceMgr::getInstance().getEmbeddedFdByUid(bag.wantedDeviceUid);
+    if (embeddedFd < 0) {
+        logger->logMsg(ERROR, "request screenshot: device offline, uid=" + bag.wantedDeviceUid, true);
+        return;
+    }
+
+    replyToEmbedded(parserCtx.senderFd, embeddedFd);
+}
+
+void ClientRequestScreenshotHandler::replyToEmbedded(int clientFd, int embeddedFd) {
+    ServerRequestScreenshotBag forward;
+    forward.requestClientFd = clientFd;
+
+    char* jsonStr = forward.toJsonString();
+    if (!jsonStr) {
+        logger->logMsg(ERROR, "request screenshot: build forward json failed", true);
+        return;
+    }
+
+    std::string json(jsonStr);
+    free(jsonStr);
+
+    if (!SocketMgr::sendMessage(embeddedFd, json)) {
+        logger->logMsg(ERROR, "request screenshot: forward to embedded failed", true);
+        return;
+    }
+
+    logger->logMsg(DEBUG, "request screenshot forwarded, client_fd="
+        + std::to_string(clientFd) + " embedded_fd=" + std::to_string(embeddedFd), true);
+}
+
+void EmbeddedScreenshotDataHandler::action(const ParserContext parserCtx) {
+    if (!parserCtx.message) {
+        logger->logMsg(ERROR, "screenshot data: empty message", true);
+        return;
+    }
+
+    ScreenshotDataBag bag;
+    bag.loadFromJsonString(parserCtx.message);
+    if (!bag.checkValid()) {
+        logger->logMsg(ERROR, "screenshot data: params invalid", true);
+        return;
+    }
+
+    if (!DeviceMgr::getInstance().isRegisteredClient(bag.requestClientFd)) {
+        logger->logMsg(WARNING, "screenshot data: client offline, fd="
+            + std::to_string(bag.requestClientFd), true);
+        return;
+    }
+
+    replyToClient(bag.requestClientFd, bag.path);
+}
+
+void EmbeddedScreenshotDataHandler::replyToClient(int clientFd, const std::string& path) {
+    RequestScreenshotAckBag ack;
+    ack.path = path;
+
+    char* jsonStr = ack.toJsonString();
+    if (!jsonStr) {
+        logger->logMsg(ERROR, "screenshot data: build ack json failed", true);
+        return;
+    }
+
+    std::string json(jsonStr);
+    free(jsonStr);
+
+    if (!SocketMgr::sendMessage(clientFd, json)) {
+        logger->logMsg(ERROR, "screenshot data: send ack failed, client_fd="
+            + std::to_string(clientFd), true);
+        return;
+    }
+
+    logger->logMsg(DEBUG, "screenshot ack sent, client_fd=" + std::to_string(clientFd)
+        + " path=" + path, true);
 }
 
 void RequestUpdateEmbeddedHandler::action(const ParserContext parserCtx) {

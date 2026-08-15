@@ -283,14 +283,14 @@ Screen Fleet Pilot — JSON 协议约定 (JSON/1)
 ------------------------------------------------------------------------------
   注意：与 client→server 同名 cmd，靠 source=server 区分。
   params:
-    device_id   number    管理后台 connection id（非 embedded id）
+    request_client_fd   number    发起请求的 client 连接 fd（server 内部路由用）
 
 ------------------------------------------------------------------------------
 4.22 screenshot_data（embedded → server）
 ------------------------------------------------------------------------------
   params:
-    device_id   number    client connection id
-    path        string    截图 HTTP 相对路径
+    request_client_fd   number    原样带回 client 连接 fd
+    path                string    截图 HTTP 相对路径
 
   server 转发 request_screenshot_ack 给对应 client。
 

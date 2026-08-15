@@ -93,6 +93,20 @@ public:
     void reply(const MaskDeviceContext ctx);
 };
 
+class ClientRequestScreenshotHandler: public JsonBagHandler {
+public:
+    ~ClientRequestScreenshotHandler() {}
+    void action(const ParserContext parserCtx) override;
+    void replyToEmbedded(int clientFd, int embeddedFd);
+};
+
+class EmbeddedScreenshotDataHandler: public JsonBagHandler {
+public:
+    ~EmbeddedScreenshotDataHandler() {}
+    void action(const ParserContext parserCtx) override;
+    void replyToClient(int clientFd, const std::string& path);
+};
+
 class ServerParser: public JsonParser {
 public:
     ServerParser(const ServerParser& other) = delete;
